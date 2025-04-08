@@ -1,0 +1,15 @@
+- in FEDRA_varsxclust_k7 ci sono 7 variabili selezionate per rappresentare teoricamente costrutti ben distinti ed essenziali
+- in FEDRA_varsxclust_k7 ci sono 12 variabili, che rappresentano costrutti non così distinti ma comunque diversi e potenzialmente utili
+- in FEDRA_varsxclust_all ci sono 27 variabili, ovvero più o meno tutti gli score principali dei task fatti
+
+In ogni file c'è una variabile IDK che rappresenta il soggetto e una variabile GRP che rappresenta il gruppo. I soggetti con GRP = EXC vanno esclusi.
+
+Per quanto riguarda il calcolo di variabili in modo più sofisticato, ti mando gli articoli in allegato:
+- Coon riguarda il task BART, da cui io per ora ho tratto la variabile di outcome in maniera "classica".
+- Haines e Sullivan-Tool riguardano il task IGT, da cui ho tratto già diverse variabili "classiche"
+
+Se tu riuscissi a calcolare queste variabili indicate nei paper direi che potremmo usare quelle e non quelle "classiche", oppure se non si fa in tempo per il clustering usiamo quelle standard, poi se ti va facciamo qualcosa di apposito sui singoli task. Se vedi che è un problema usiamo le classiche e ciao.
+
+****
+prendi quelle varsxclust, non vars_x_clust, anche se penso siano uguali
+****

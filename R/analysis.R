@@ -118,7 +118,7 @@ inits.jagsParallel=function(nParticipants){
 
 #Now use jags.parallel to run multiple chains much quicker, adjust chains in n.chains
 
-output_bart =jags.parallel(data,inits=inits.jagsParallel(nParticipants), 
+output_bart =R2jags::jags.parallel(data,inits=inits.jagsParallel(nParticipants), 
                        parameters.to.save = parameters,
                        model.file="BARTMeasurement_1_jags.txt",n.chains=3,
                        n.burnin = 1000, n.iter=10000, 

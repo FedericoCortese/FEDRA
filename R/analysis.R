@@ -55,7 +55,7 @@ head(data_iowa_final)
 tail(data_iowa_final)
 str(data_iowa_final)
 
-output_iowa <- igt_orl(
+output_iowa <- hBayesDM::igt_orl(
   data = data_iowa_final, niter = 4000, nwarmup = 1000, nchain = 3, ncore = parallel::detectCores()-1)
 save(output_iowa, file="output_iowa.RData")
 

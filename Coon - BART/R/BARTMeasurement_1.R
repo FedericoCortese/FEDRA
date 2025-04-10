@@ -1,9 +1,3 @@
-# clears workspace:  
-rm(list=ls()) 
-
-# sets working directories:
-
-# setwd('C:/Users/Jeff/Documents/R/BARTmethods')
 
 # loads necessary library
 library(R2jags)
@@ -28,6 +22,7 @@ data <- list("nParticipants","totalTrials","maxPumps","burst","y","participant")
 
 # Run model in JAGS -------------------------------------------------------
 
+library(R2jags)
 # parameters to be monitored:	
 parameters <- c("beta", "rho","yPrime")
 

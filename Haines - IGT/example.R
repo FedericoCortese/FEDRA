@@ -2,7 +2,7 @@
 # Install Rtools
 
 # Install RStan
-install.packages("rstan", dependencies = TRUE)
+##install.packages("rstan", dependencies = TRUE)
 library(rstan)
 
 # Install hBayesDM
@@ -12,12 +12,14 @@ library(hBayesDM)
 # IGT-ORL example
 
 # Run the model with a given data.frame as df
-output <- igt_orl(
-  data = df, niter = 2000, nwarmup = 1000, nchain = 4, ncore = 4)
+# output <- igt_orl(
+#   data = df, niter = 2000, nwarmup = 1000, nchain = 4, ncore = 4)
 
 # Run the model with example data
+# output <- igt_orl(
+#   data = "example", niter = 2000, nwarmup = 1000, nchain = 4, ncore = 4)
 output <- igt_orl(
-  data = "example", niter = 2000, nwarmup = 1000, nchain = 4, ncore = 4)
+  data = "example", niter = 200, nwarmup = 10, nchain = 1, ncore = 3)
 
 head(output$rawdata)
 

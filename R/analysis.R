@@ -132,5 +132,20 @@ output_bart =R2jags::jags.parallel(data,inits=inits.jagsParallel(nParticipants),
                        n.burnin = 1000, n.iter=10000, 
                        n.thin=1)
 
-save(output_bart, file="output_bart.RData")
+#save(output_bart, file="output_bart.RData")
 
+rho_samples <- output_bart$BUGSoutput$sims.list$rho
+x11()
+matplot(output_bart$BUGSoutput$sims.list$rho,type='l')
+
+beta_samples <- output_bart$BUGSoutput$sims.list$beta
+x11()
+matplot(output_bart$BUGSoutput$sims.list$beta,type='l')
+
+
+summary <- output_bart$BUGSoutput$summary
+summary
+
+av_betas=summary[1:nParticipants,1]
+
+dim(output_bart$BUGSoutput$sims.matrix)

@@ -6,7 +6,7 @@
 library(rstan)
 
 # Install hBayesDM
-install.packages("hBayesDM", dependencies=TRUE)
+#install.packages("hBayesDM", dependencies=TRUE)
 library(hBayesDM)
 
 # IGT-ORL example

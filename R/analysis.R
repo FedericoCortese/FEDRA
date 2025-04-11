@@ -49,16 +49,24 @@ data_iowa_cleaned$lose=as.integer(data_iowa_cleaned$lose)
 
 data_iowa_cleaned$subjID=as.integer(gsub("#", "", data_iowa_cleaned$IDK))
 
-data_iowa_final=data_iowa_cleaned[,c("trial", "choice", "win", "lose", "subjID")]
+#data_iowa_final=data_iowa_cleaned[,c("trial", "choice", "win", "lose", "subjID")]
+data_iowa_final=data_iowa_cleaned[,c("subjID","choice", "win", "lose")]
+colnames(data_iowa_final)=c("subjID","choice","gain","loss")
 
 head(data_iowa_final)
 tail(data_iowa_final)
 str(data_iowa_final)
 
+write.table(data_iowa_final, file = "data_iowa_final.txt", sep = "\t", row.names = FALSE, quote = FALSE)
+
 #install.packages("hBayesDM", dependencies=TRUE)
 
+# output_iowa <- hBayesDM::igt_orl(
+#   data = "data_iowa_final.txt", niter = 400, nwarmup = 100, nchain = 1
+#   )
+
 output_iowa <- hBayesDM::igt_orl(
-  data = data_iowa_final, niter = 4000, nwarmup = 1000, nchain = 3, ncore = parallel::detectCores()-1)
+  data = "data_iowa_final.txt", niter = 4000, nwarmup = 1000, nchain = 3, ncore = parallel::detectCores()-1)
 save(output_iowa, file="output_iowa.RData")
 
 

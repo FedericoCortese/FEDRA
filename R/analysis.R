@@ -65,10 +65,29 @@ write.table(data_iowa_final, file = "data_iowa_final.txt", sep = "\t", row.names
 #   data = "data_iowa_final.txt", niter = 400, nwarmup = 100, nchain = 1
 #   )
 
+library(hBayesDM)
+library(rstan)
+
 output_iowa <- hBayesDM::igt_orl(
   data = "data_iowa_final.txt", niter = 4000, nwarmup = 1000, nchain = 3, ncore = parallel::detectCores()-1)
-save(output_iowa, file="output_iowa.RData")
+#save(output_iowa, file="output_iowa.RData")
 
+# Number of subjects
+length(unique(data_iowa_final$subjID))
+
+# Trace plot for K for the first subject
+plot(output_iowa$parVals$K[,1],type='l')
+
+# Check Rhat values (all Rhat values should close to 1)
+Rhat_iowa=rhat(output_iowa)
+head(Rhat_iowa)
+hist(Rhat_iowa$Rhat)
+summary(Rhat_iowa$Rhat)
+
+# Means of the posteriors
+data_iowa_posteriors=output_iowa$allIndPars
+data_iowa_posteriors$IDK=unique(data_iowa_cleaned$IDK)
+save(data_iowa_posteriors, file="data_iowa_posteriors.RData")
 
 # BART --------------------------------------------------------------------
 
@@ -83,14 +102,19 @@ save(output_iowa, file="output_iowa.RData")
 
 head(data_bart_cleaned)
 
+length(unique(data_bart_cleaned$IDK))
+
 data_bart_cleaned$participant=as.integer(gsub("#", "", data_bart_cleaned$IDK))
 data_bart_cleaned$y=as.integer(data_bart_cleaned$pumps)
 data_bart_cleaned$burst=as.integer(data_bart_cleaned$life)
 
 data_bart_final=data_bart_cleaned[,c("participant", "y", "burst")]
 
+head(data_bart_final)
+tail(data_bart_final)
+
 # Set the needed values
-nParticipants = max(data_bart_final$participant) # number of participants in the experiment
+nParticipants = length(unique(data_bart_final$participant)) # number of participants in the experiment
 maxPumps <- max(data_bart_final$burst)+ 2 # just needs to be higher than the number of pumps and participant did
 totalTrials <- length(data_bart_final$participant) # total number of trials across all participants
 
@@ -135,8 +159,8 @@ output_bart =R2jags::jags.parallel(data,inits=inits.jagsParallel(nParticipants),
 #save(output_bart, file="output_bart.RData")
 
 rho_samples <- output_bart$BUGSoutput$sims.list$rho
-x11()
-matplot(output_bart$BUGSoutput$sims.list$rho,type='l')
+# x11()
+# matplot(output_bart$BUGSoutput$sims.list$rho,type='l')
 
 beta_samples <- output_bart$BUGSoutput$sims.list$beta
 x11()

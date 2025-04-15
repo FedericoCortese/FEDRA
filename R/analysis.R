@@ -170,10 +170,30 @@ matplot(output_bart$BUGSoutput$sims.list$beta,type='l')
 
 summary_bart <- output_bart$BUGSoutput$summary
 head(summary_bart)
-summary_bart[1:nParticipants,1]
+
+
+data_bart_posterior=data.frame()
+
+# Convergence check for beta: Rhat
+hist(summary_bart[1:nParticipants,8])
+summary(summary_bart[1:nParticipants,8])
+#ESS
+summary(summary_bart[1:nParticipants,9])
+
+
+data_bart_posterior=data.frame(beta=summary_bart[1:nParticipants,1])
+
 summary_bart[nParticipants+1,]
-summary_bart[(nParticipants+2):(2*nParticipants+1),1]
 
-av_betas=summary[1:nParticipants,1]
+# Convergence check for rho: Rhat
+hist(summary_bart[(nParticipants+2):(2*nParticipants+1),8])
+summary(summary_bart[(nParticipants+2):(2*nParticipants+1),8])
+#ESS
+summary(summary_bart[(nParticipants+2):(2*nParticipants+1),9])
 
-dim(output_bart$BUGSoutput$sims.matrix)
+data_bart_posterior$rho=summary_bart[(nParticipants+2):(2*nParticipants+1),1]
+
+data_bart_posterior$IDK=unique(data_bart_cleaned$IDK)
+rownames(data_bart_posterior)=NULL
+
+save(data_bart_posterior, file="data_bart_posterior.RData")

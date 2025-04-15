@@ -104,7 +104,8 @@ head(data_bart_cleaned)
 
 length(unique(data_bart_cleaned$IDK))
 
-data_bart_cleaned$participant=as.integer(gsub("#", "", data_bart_cleaned$IDK))
+#data_bart_cleaned$participant=as.integer(gsub("#", "", data_bart_cleaned$IDK))
+data_bart_cleaned$participant=1:length(unique(data_bart_cleaned$IDK))
 data_bart_cleaned$y=as.integer(data_bart_cleaned$pumps)
 data_bart_cleaned$burst=as.integer(data_bart_cleaned$life)
 
@@ -167,8 +168,11 @@ x11()
 matplot(output_bart$BUGSoutput$sims.list$beta,type='l')
 
 
-summary <- output_bart$BUGSoutput$summary
-summary
+summary_bart <- output_bart$BUGSoutput$summary
+head(summary_bart)
+summary_bart[1:nParticipants,1]
+summary_bart[nParticipants+1,]
+summary_bart[(nParticipants+2):(2*nParticipants+1),1]
 
 av_betas=summary[1:nParticipants,1]
 

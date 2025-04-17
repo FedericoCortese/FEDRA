@@ -23,7 +23,7 @@ initialize_states <- function(Y, K) {
 }
 
 
-weight_inv_exp_dist <- function(Y, s, W, zeta) {
+weight_inv_exp_dist <- function(Y,Ymedoids,index_medoids, s, W, zeta) {
   TT <- nrow(Y)
   P <- ncol(Y)
   
@@ -33,25 +33,27 @@ weight_inv_exp_dist <- function(Y, s, W, zeta) {
     if (r == 0) 1 else r
   })
   #Y_scaled <- sweep(Y, 2, range_Y, FUN = "/")
-  
+
   # 2. Genera indici delle coppie (i < j)
-  pairs <- combn(TT, 2)
-  i_idx <- pairs[1, ]
-  j_idx <- pairs[2, ]
-  n_pairs <- ncol(pairs)
-  
+  # pairs <- combn(TT, 2)
+  # i_idx <- pairs[1, ]
+  # j_idx <- pairs[2, ]
+  # n_pairs <- ncol(pairs)
+
   # 3. Estrai le righe corrispondenti
   # Yi <- Y_scaled[i_idx, , drop = FALSE]
   # Yj <- Y_scaled[j_idx, , drop = FALSE]
   Yi <- Y[i_idx, , drop = FALSE]
-  Yj <- Y[j_idx, , drop = FALSE]
+  # Yj <- Y[j_idx, , drop = FALSE]
+  # diff <- abs(Yi - Yj)
   diff <- abs(Yi - Yj)
   diff=sweep(diff, 2, range_Y, FUN = "/")
   
+
   # 4. Estrai direttamente i pesi W[si, ] e W[sj, ] in blocco
-  W_si <- W[s[i_idx], , drop = FALSE]
-  W_sj <- W[s[j_idx], , drop = FALSE]
-  max_w <- pmax(W_si, W_sj)
+  # W_si <- W[s[i_idx], , drop = FALSE]
+  # W_sj <- W[s[j_idx], , drop = FALSE]
+  # max_w <- pmax(W_si, W_sj)
   
   # 5. Calcola la distanza finale
   weighted_exp <- exp(-diff / zeta) * max_w
@@ -264,12 +266,12 @@ COSA=function(Y,zeta0,K,tol,n_outer=20,alpha=.1,verbose=F){
       
     }
     
-    if (!is.null(tol)) {
-      eps_W=mean((W-W_old)^2)
-      if (eps_W < tol) {
-        break
-      }
-    }
+    # if (!is.null(tol)) {
+    #   eps_W=mean((W-W_old)^2)
+    #   if (eps_W < tol) {
+    #     break
+    #   }
+    # }
     
     W_old=W
     zeta=zeta+alpha*zeta0

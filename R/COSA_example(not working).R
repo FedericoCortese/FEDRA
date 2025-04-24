@@ -21,6 +21,25 @@ X[i[16:30], k[31:45]] <- X[i[16:30], k[31:45]]*0.2 + 1.5
 X <- data.frame(scale(X))
 dim(X)
 Y=X
+
+true_clust=matrix(0,nrow=nrow(Y),ncol=ncol(Y))
+true_clust[1:15,1:15]=1
+true_clust[1:15,16:30]=2
+true_clust[16:30,16:30]=2
+true_clust[16:30,31:45]=1
+
+x11()
+par(mfrow=c(5,5))
+for(i in 1:25){
+  plot(Y[,i],col=true_clust[,i]+1,pch=19,main=paste("Feature",i))
+}
+
+x11()
+par(mfrow=c(5,5))
+for(i in 26:50){
+  plot(Y[,i],col=true_clust[,i]+1,pch=19,main=paste("Feature",i))
+}
+
 # s=sample(1:2,nrow(Y),replace=T)
 # W=matrix(runif(ncol(Y)*2),nrow=2,ncol=ncol(Y))
 # W=W/rowSums(W)

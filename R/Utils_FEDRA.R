@@ -22,8 +22,11 @@ initialize_states <- function(Y, K) {
   return(init_stats)
 }
 
-
-weight_inv_exp_dist <- function(Y,Ymedoids,index_medoids, s, W, zeta) {
+weight_inv_exp_dist <- function(Y,
+                                #Ymedoids,
+                                #index_medoids, 
+                                #s, 
+                                W, zeta) {
   TT <- nrow(Y)
   P <- ncol(Y)
   
@@ -32,20 +35,20 @@ weight_inv_exp_dist <- function(Y,Ymedoids,index_medoids, s, W, zeta) {
     r <- max(col) - min(col)
     if (r == 0) 1 else r
   })
-  #Y_scaled <- sweep(Y, 2, range_Y, FUN = "/")
+  Y_scaled <- sweep(Y, 2, range_Y, FUN = "/")
 
   # 2. Genera indici delle coppie (i < j)
-  # pairs <- combn(TT, 2)
-  # i_idx <- pairs[1, ]
-  # j_idx <- pairs[2, ]
-  # n_pairs <- ncol(pairs)
+  pairs <- combn(TT, 2)
+  i_idx <- pairs[1, ]
+  j_idx <- pairs[2, ]
+  n_pairs <- ncol(pairs)
 
   # 3. Estrai le righe corrispondenti
-  # Yi <- Y_scaled[i_idx, , drop = FALSE]
-  # Yj <- Y_scaled[j_idx, , drop = FALSE]
+  Yi <- Y_scaled[i_idx, , drop = FALSE]
+  Yj <- Y_scaled[j_idx, , drop = FALSE]
   Yi <- Y[i_idx, , drop = FALSE]
-  # Yj <- Y[j_idx, , drop = FALSE]
-  # diff <- abs(Yi - Yj)
+  Yj <- Y[j_idx, , drop = FALSE]
+  diff <- abs(Yi - Yj)
   diff <- abs(Yi - Yj)
   diff=sweep(diff, 2, range_Y, FUN = "/")
   
@@ -53,7 +56,9 @@ weight_inv_exp_dist <- function(Y,Ymedoids,index_medoids, s, W, zeta) {
   # 4. Estrai direttamente i pesi W[si, ] e W[sj, ] in blocco
   # W_si <- W[s[i_idx], , drop = FALSE]
   # W_sj <- W[s[j_idx], , drop = FALSE]
-  # max_w <- pmax(W_si, W_sj)
+  W_si <- W[i_idx, , drop = FALSE]
+  W_sj <- W[j_idx, , drop = FALSE]
+  max_w <- pmax(W_si, W_sj)
   
   # 5. Calcola la distanza finale
   weighted_exp <- exp(-diff / zeta) * max_w
@@ -204,7 +209,7 @@ apply_noise_by_cluster <- function(Y, s, feat_list) {
 }
 
 zeta0=0.2
-K=2
+K=3
 tol=1e-8
 n_outer=10
 alpha=.1
@@ -217,8 +222,8 @@ simDat=sim_data_stud_t(seed=123,
                        TT=TT,
                        P=P,
                        Pcat=NULL,
-                       Ktrue=3,
-                       mu=2,
+                       Ktrue=K,
+                       mu=10,
                        rho=0,
                        nu=4,
                        phi=.8,
@@ -231,6 +236,13 @@ feat_list[[2]]=5:15
 feat_list[[3]]=10:20
 Y_noised=apply_noise_by_cluster(Y,simDat$mchain,feat_list)
 Y=Y_noised
+
+x11()
+par(mfrow=c(4,3))
+for (i in 1:length(feat_list)) {
+  plot(Y[, feat_list[[i]]], col=simDat$mchain, pch=19, main=paste("Cluster", i))
+}
+
 s_true=simDat$mchain
 
 COSA=function(Y,zeta0,K,tol,n_outer=20,alpha=.1,verbose=F){
@@ -246,16 +258,20 @@ COSA=function(Y,zeta0,K,tol,n_outer=20,alpha=.1,verbose=F){
   
   zeta=zeta0
   
-  # Run multiple times
-  s=initialize_states(Y,K)
+  #s=initialize_states(Y,K)
+  # Ymedoids=cluster::pam(Y,k=3)
+  # s=Ymedoids$clustering
+  # Ymedoids=Ymedoids$medoids
   
   for (outer in 1:n_outer){
     
     ## Clustering
-    for(inner in 1:n_inner){
+    #for(inner in 1:n_inner){
       
       #Compute distances
-      DW=weight_inv_exp_dist(Y,s,W,zeta)
+      DW=weight_inv_exp_dist(Y,
+                             #s,
+                             W,zeta)
       medoids=cluster::pam(x=DW,k=K,diss=TRUE)
       Ymedoids=Y[medoids$medoids,]
       s=medoids$clustering
@@ -264,14 +280,14 @@ COSA=function(Y,zeta0,K,tol,n_outer=20,alpha=.1,verbose=F){
       wcd=exp(-WCD(s,Y,K)/zeta0)
       W=wcd/rowSums(wcd)
       
-    }
+    #}
     
-    # if (!is.null(tol)) {
-    #   eps_W=mean((W-W_old)^2)
-    #   if (eps_W < tol) {
-    #     break
-    #   }
-    # }
+    if (!is.null(tol)) {
+      eps_W=mean((W-W_old)^2)
+      if (eps_W < tol) {
+        break
+      }
+    }
     
     W_old=W
     zeta=zeta+alpha*zeta0

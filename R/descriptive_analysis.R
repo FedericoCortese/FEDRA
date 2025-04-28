@@ -8,6 +8,9 @@ data_features_all=subset(data_features_all,select=-subjID)
 data_features_all=merge(data_features_all,data_cleaned,by="IDK")
 data_features_all$GRP <- as.factor(data_features_all$GRP)
 
+#save(data_features_all,file="data_features_all.Rdata")
+#load("C:/Users/federico/OneDrive - CNR/Brancati-Cortese/data and results/data_features_all.Rdata")
+
 unique(data_features_all$GRP)
 head(data_features_all)
 

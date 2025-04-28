@@ -25,17 +25,16 @@ initialize_states <- function(Y, K) {
 weight_inv_exp_dist <- function(Y,
                                 #Ymedoids,
                                 #index_medoids, 
-                                #s, 
+                                s, 
                                 W, zeta) {
   TT <- nrow(Y)
   P <- ncol(Y)
   
   # 1. Normalizzazione Gower
-  range_Y <- apply(Y, 2, function(col) {
-    r <- max(col) - min(col)
-    if (r == 0) 1 else r
-  })
-  Y_scaled <- sweep(Y, 2, range_Y, FUN = "/")
+  # range_Y <- apply(Y, 2, function(col) {
+  #   r <- max(col) - min(col)
+  #   if (r == 0) 1 else r
+  # })
 
   # 2. Genera indici delle coppie (i < j)
   pairs <- combn(TT, 2)
@@ -44,20 +43,19 @@ weight_inv_exp_dist <- function(Y,
   n_pairs <- ncol(pairs)
 
   # 3. Estrai le righe corrispondenti
-  Yi <- Y_scaled[i_idx, , drop = FALSE]
-  Yj <- Y_scaled[j_idx, , drop = FALSE]
   Yi <- Y[i_idx, , drop = FALSE]
   Yj <- Y[j_idx, , drop = FALSE]
   diff <- abs(Yi - Yj)
-  diff <- abs(Yi - Yj)
-  diff=sweep(diff, 2, range_Y, FUN = "/")
+  sk=apply(diff,2,function(x)sum(x)/TT^2)
+  diff=sweep(diff, 2, sk, FUN = "/")
+  #diff=sweep(diff, 2, range_Y, FUN = "/")
   
 
   # 4. Estrai direttamente i pesi W[si, ] e W[sj, ] in blocco
-  # W_si <- W[s[i_idx], , drop = FALSE]
-  # W_sj <- W[s[j_idx], , drop = FALSE]
-  W_si <- W[i_idx, , drop = FALSE]
-  W_sj <- W[j_idx, , drop = FALSE]
+  W_si <- W[s[i_idx], , drop = FALSE]
+  W_sj <- W[s[j_idx], , drop = FALSE]
+  # W_si <- W[i_idx, , drop = FALSE]
+  # W_sj <- W[j_idx, , drop = FALSE]
   max_w <- pmax(W_si, W_sj)
   
   # 5. Calcola la distanza finale
@@ -189,61 +187,99 @@ sim_data_stud_t=function(seed=123,
   
 }
 
-apply_noise_by_cluster <- function(Y, s, feat_list) {
-  Y_noised <- Y
-  K <- length(feat_list)
-  
-  for (k in 1:K) {
-    cluster_rows <- which(s == k)
-    if (length(cluster_rows) <= 1) next  # nulla da mescolare se solo una riga
-    all_features <- seq_len(ncol(Y))
-    irrelevant_feats <- setdiff(all_features, feat_list[[k]])
-    
-    for (j in irrelevant_feats) {
-      # mescola le osservazioni della colonna j solo tra le righe del cluster k
-      Y_noised[cluster_rows, j] <- sample(Y[, j],size=length(Y_noised[cluster_rows, j]))
-    }
-  }
-  
-  return(Y_noised)
-}
+# apply_noise_by_cluster <- function(Y, s, feat_list) {
+#   Y_noised <- Y
+#   K <- length(feat_list)
+#   
+#   for (k in 1:K) {
+#     cluster_rows <- which(s == k)
+#     if (length(cluster_rows) <= 1) next  # nulla da mescolare se solo una riga
+#     all_features <- seq_len(ncol(Y))
+#     irrelevant_feats <- setdiff(all_features, feat_list[[k]])
+#     
+#     for (j in irrelevant_feats) {
+#       # mescola le osservazioni della colonna j solo tra le righe del cluster k
+#       Y_noised[cluster_rows, j] <- sample(Y[, j],size=length(Y_noised[cluster_rows, j]))
+#     }
+#   }
+#   
+#   return(Y_noised)
+# }
 
-zeta0=0.2
-K=3
-tol=1e-8
-n_outer=10
-alpha=.1
+zeta0=0.02
+alpha=1
+K=2
+tol=1e-5
+n_outer=15
 verbose=T
 
-TT=100
-P=50
+TT=500
+P=10
 
 simDat=sim_data_stud_t(seed=123,
                        TT=TT,
                        P=P,
                        Pcat=NULL,
-                       Ktrue=K,
-                       mu=10,
+                       Ktrue=2,
+                       mu=5,
                        rho=0,
-                       nu=4,
+                       nu=100,
                        phi=.8,
-                       pers=0)
+                       pers=0.95)
 
 Y=simDat$SimData
-feat_list=list()
-feat_list[[1]]=1:10
-feat_list[[2]]=5:15
-feat_list[[3]]=10:20
-Y_noised=apply_noise_by_cluster(Y,simDat$mchain,feat_list)
-Y=Y_noised
+true_stat=simDat$mchain
+
+plot(Y[,2],col=true_stat,pch=19)
+
+# feat_list=list()
+# feat_list[[1]]=1:10
+# feat_list[[2]]=5:15
+# feat_list[[3]]=10:20
+# Y_noised=apply_noise_by_cluster(Y,simDat$mchain,feat_list)
+# Y=Y_noised
+
+
+nu=4
+# State 1, only features 1,2 and 3 are relevant
+indx=which(true_stat!=1)
+Sigma <- matrix(0,ncol=P-3,nrow=P-3)
+diag(Sigma)=5
+Y[indx,-(1:3)]=mvtnorm::rmvt(length(indx), 
+                             sigma = (nu-2)*Sigma/nu, 
+                             df = nu, delta = rep(0,P-3))
+
+# State 2, only features 3,4 and 5 are relevant
+indx=which(true_stat!=2)
+Y[indx,-(3:5)]=mvtnorm::rmvt(length(indx), 
+                             sigma = (nu-2)*Sigma/nu, 
+                             df = nu, delta = rep(0,P-3))
+
+# # State 3, only features 5,6 and 7 are relevant
+# indx=which(true_stat!=3)
+# Y[indx,-(5:7)]=mvtnorm::rmvt(length(indx), 
+#                              sigma = (nu-2)*Sigma/nu, 
+#                              df = nu, delta = rep(0,P-3))
+
+# Other features are not relevant
+# Sigma <- matrix(0,ncol=5,nrow=5)
+# diag(Sigma)=5
+# Y[,6:10]=mvtnorm::rmvt(TT, 
+#                        sigma = (nu-2)*Sigma/nu, 
+#                        df = nu, delta = rep(0,5))
+
+Sigma <- matrix(0,ncol=P-5,nrow=P-5)
+diag(Sigma)=5
+Y[,6:P]=mvtnorm::rmvt(TT, 
+                       sigma = (nu-2)*Sigma/nu, 
+                       df = nu, delta = rep(0,P-5))
 
 x11()
 par(mfrow=c(4,3))
-for (i in 1:length(feat_list)) {
-  plot(Y[, feat_list[[i]]], col=simDat$mchain, pch=19, main=paste("Cluster", i))
+for (i in 1:P) {
+  plot(Y[, i], col=simDat$mchain, pch=19,ylab=i)
 }
 
-s_true=simDat$mchain
 
 COSA=function(Y,zeta0,K,tol,n_outer=20,alpha=.1,verbose=F){
   P=ncol(Y)
@@ -259,9 +295,10 @@ COSA=function(Y,zeta0,K,tol,n_outer=20,alpha=.1,verbose=F){
   zeta=zeta0
   
   #s=initialize_states(Y,K)
-  # Ymedoids=cluster::pam(Y,k=3)
+  # Ymedoids=cluster::pam(Y,k=K)
   # s=Ymedoids$clustering
   # Ymedoids=Ymedoids$medoids
+  s=sample(1:K,TT,replace = T)
   
   for (outer in 1:n_outer){
     
@@ -270,7 +307,7 @@ COSA=function(Y,zeta0,K,tol,n_outer=20,alpha=.1,verbose=F){
       
       #Compute distances
       DW=weight_inv_exp_dist(Y,
-                             #s,
+                             s,
                              W,zeta)
       medoids=cluster::pam(x=DW,k=K,diss=TRUE)
       Ymedoids=Y[medoids$medoids,]
@@ -281,9 +318,9 @@ COSA=function(Y,zeta0,K,tol,n_outer=20,alpha=.1,verbose=F){
       W=wcd/rowSums(wcd)
       
     #}
-    
+      
+    eps_W=mean((W-W_old)^2)
     if (!is.null(tol)) {
-      eps_W=mean((W-W_old)^2)
       if (eps_W < tol) {
         break
       }
@@ -291,6 +328,10 @@ COSA=function(Y,zeta0,K,tol,n_outer=20,alpha=.1,verbose=F){
     
     W_old=W
     zeta=zeta+alpha*zeta0
+    
+    print(W)
+    print(zeta)
+    print(range(DW))
     
     if (verbose) {
       cat(sprintf('Outer iteration %d: %.6e\n', outer, eps_W))

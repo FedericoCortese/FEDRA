@@ -1,3 +1,8 @@
+library(cluster)
+library(mclust)
+library(tclust)
+library(sparcl)
+
 # load("C:/Users/federico/OneDrive - CNR/Brancati-Cortese/data and results/data_features_all.Rdata")
 
 load("C:/Users/federico/OneDrive - CNR/Brancati-Cortese/data and results/FEDRA_varsxclust_k7.RData")
@@ -10,15 +15,46 @@ features_k7=data_k7_cleaned[,-(1:2)]
 length(unique(data_k7_cleaned$GRP))
 
 
+# (0) Hyperparameters selection -------------------------------------------
+
+# GAP statistics - tclust
+factoextra::fviz_nbclust(features_k7,tclust,method = "gap_stat",
+                         alpha = 0.03, nstart = 50,restr.fact = 12,opt='MIXT',k.max=6)
+
+# Silhouette - tclust
+factoextra::fviz_nbclust(features_k7,tclust,method = "silhouette",
+                         alpha = 0.03, nstart = 50,restr.fact = 12,opt='MIXT',k.max=6)
+
+# Curve CTL per diversi livelli di trimming e numero di cluster
+n <- dim(features_k7)[1]
+x11()
+plot(ctlcurves(features_k7, k = 2:6, alpha = (0:10) / n), main = "CTL Curves",restr.fact =12)
+
+# Sparse k means
+# Selection of sparsity parameter
+
+P=dim(features_k7)[2]
+
+km.perm=sparcl::KMeansSparseCluster.permute(features_k7,K=4,wbounds=seq(1.1,sqrt(P),length.out=10))
+sparcl::KMeansSparseCluster.permute(features_k7,K=5,wbounds=seq(1.1,sqrt(P),length.out=10))
+sparcl::KMeansSparseCluster.permute(features_k7,K=6,wbounds=seq(1.1,sqrt(P),length.out=10))
+
+# It always selects 1.27175
+
+factoextra::fviz_nbclust(features_k7,KMeansSparseCluster,
+                         method = "gap_stat",
+                         wbounds=km.perm$bestw,
+                         k.max=6)
+
+cluster::clusGap(features_k7,KMeansSparseCluster,K.max=6,
+                 wbounds=km.perm$bestw)
+
 # (1) Sparse k-means ------------------------------------------------------
 
 library(RSKC)
 
 P=dim(features_k7)[2]
 
-factoextra::fviz_nbclust(features_k7, RSKC::RSKC, method = "gap_stat",
-                         alpha=.03, L1 = sqrt(P), nstart = 100,k.max=6,
-                         silent=TRUE, scaling = T, correlation = FALSE)
 
 cluster::clusGap(features_k7,RSKC::RSKC,K.max=6,
                  alpha=.03, L1 = sqrt(P), nstart = 100,
@@ -44,18 +80,6 @@ for(i in 1:ncol(features_k7)){
   hist(features_k7[,i], main=colnames(features_k7)[i], ylab="value", xlab="feature",col=i+1)
 }
 
-# GAP statistics
-factoextra::fviz_nbclust(features_k7,tclust,method = "gap_stat",
-                         alpha = 0.03, nstart = 50,restr.fact = 12,opt='MIXT',k.max=6)
-
-# Silhouette
-factoextra::fviz_nbclust(features_k7,tclust,method = "silhouette",
-                         alpha = 0.03, nstart = 50,restr.fact = 12,opt='MIXT',k.max=6)
-
-# Curve CTL per diversi livelli di trimming e numero di cluster
-n <- dim(features_k7)[1]
-x11()
-plot(ctlcurves(features_k7, k = 2:6, alpha = (0:10) / n), main = "CTL Curves",restr.fact =12)
 
 ## 6 groups, 2-4% outliers ##
 tc6_3 <- tclust(features_k7, k = 6, alpha = 0.03, nstart = 100,restr.fact = 12,opt='MIXT')

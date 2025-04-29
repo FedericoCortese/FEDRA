@@ -35,7 +35,9 @@ weight_inv_exp_dist <- function(Y,
   #   r <- max(col) - min(col)
   #   if (r == 0) 1 else r
   # })
-
+  
+  sk=apply(Y,2,function(x)IQR(x)/1.35)
+  
   # 2. Genera indici delle coppie (i < j)
   pairs <- combn(TT, 2)
   i_idx <- pairs[1, ]
@@ -46,7 +48,8 @@ weight_inv_exp_dist <- function(Y,
   Yi <- Y[i_idx, , drop = FALSE]
   Yj <- Y[j_idx, , drop = FALSE]
   diff <- abs(Yi - Yj)
-  sk=apply(diff,2,function(x)sum(x)/TT^2)
+  #sk=apply(diff,2,function(x)sum(x)/TT^2)
+  
   diff=sweep(diff, 2, sk, FUN = "/")
   #diff=sweep(diff, 2, range_Y, FUN = "/")
   
@@ -86,16 +89,17 @@ weight_inv_exp_dist <- function(Y,
 # }
 
 WCD=function(s,Y,K){
-  TT <- nrow(Y)
+  #TT <- nrow(Y)
   P <- ncol(Y)
   
   wcd=matrix(0,nrow=K,ncol=P)
   
   # 1. Normalizzazione Gower
-  range_Y <- apply(Y, 2, function(col) {
-    r <- max(col) - min(col)
-    if (r == 0) 1 else r
-  })
+  # range_Y <- apply(Y, 2, function(col) {
+  #   r <- max(col) - min(col)
+  #   if (r == 0) 1 else r
+  # })
+  sk=apply(Y,2,function(x)IQR(x)/1.35)
   
   for(i in 1:K){
     Ys=Y[s==i,]
@@ -108,10 +112,20 @@ WCD=function(s,Y,K){
     Yi <- Ys[i_idx, , drop = FALSE]
     Yj <- Ys[j_idx, , drop = FALSE]
     diff <- abs(Yi - Yj)
-    diff=sweep(diff, 2, range_Y, FUN = "/")
+    #sk=apply(diff,2,function(x)sum(x)/TTk^2)
     
-    wcd[i,]=colSums(diff)/TTk^2
+    diff=sweep(diff, 2, sk, FUN = "/")
+   # diff=sweep(diff, 2, range_Y, FUN = "/")
     
+    for(p in 1:P){
+      mat <- matrix(0, TTk, TTk)
+      mat[cbind(i_idx, j_idx)] <- diff[,p]
+      mat[cbind(j_idx, i_idx)] <- diff[,p]
+      wcd[i,p]=mean(apply(mat,1,median))
+    }
+    # 
+    #wcd[i,]=colSums(diff)/TTk^2
+    #wcd[i,]=apply(diff,2,median)/TTk
   }
   return(wcd)
   
@@ -209,7 +223,7 @@ sim_data_stud_t=function(seed=123,
 zeta0=0.02
 alpha=1
 K=2
-tol=1e-5
+tol=1e-9
 n_outer=15
 verbose=T
 
@@ -314,7 +328,9 @@ COSA=function(Y,zeta0,K,tol,n_outer=20,alpha=.1,verbose=F){
       s=medoids$clustering
       
       # Compute weights
-      wcd=exp(-WCD(s,Y,K)/zeta0)
+      
+      Spk=WCD(s,Y,K)
+      wcd=exp(-Spk/zeta0)
       W=wcd/rowSums(wcd)
       
     #}
@@ -329,8 +345,10 @@ COSA=function(Y,zeta0,K,tol,n_outer=20,alpha=.1,verbose=F){
     W_old=W
     zeta=zeta+alpha*zeta0
     
-    print(W)
-    print(zeta)
+    # print(W)
+    # print(zeta)
+    print(Spk)
+    print(zeta0)
     print(range(DW))
     
     if (verbose) {

@@ -288,10 +288,20 @@ Y[,6:P]=mvtnorm::rmvt(TT,
                        sigma = (nu-2)*Sigma/nu, 
                        df = nu, delta = rep(0,P-5))
 
+
+# Introduce outliers
+set.seed(1)
+N_out=TT*0.02
+t_out=sample(1:TT,size=N_out)
+Y[t_out,]=Y[t_out,]+rnorm(N_out*P,0,10)
+
+truth=simDat$mchain
+truth[t_out]=0
+  
 x11()
 par(mfrow=c(4,3))
 for (i in 1:P) {
-  plot(Y[, i], col=simDat$mchain, pch=19,ylab=i)
+  plot(Y[, i], col=truth+1, pch=19,ylab=i)
 }
 
 
@@ -357,6 +367,113 @@ COSA=function(Y,zeta0,K,tol,n_outer=20,alpha=.1,verbose=F){
     
   }
   return(list(W=W,s=s,medoids=medoids))
+}
+
+
+library(DescTools)
+
+lof_star=function(x,knn){
+  lof_x=DescTools::LOF(x, knn)
+  mean_lof=mean(lof_x)
+  sd_lof=sd(lof_x)
+  lof_st=(lof_x-mean_lof)/sd_lof
+  return(lof_st)
+}
+
+v_1=function(x,knn,c=2,M=NULL){
+  
+  lof_st=lof_star(x,knn)
+  
+  if(is.null(M)){
+    M=median(lof_st)+mad(lof_st)
+  }
+  
+  v=rep(1,dim(x)[1])
+  v[lof_st>=c]=0
+  indx=which(M<lof_st&lof_st<c)
+  v[indx]=(1-((lof_st[indx]-M)/(c-M))^2)^2
+  return(v)
+}
+
+robust_COSA=function(Y,zeta0,K,tol,n_outer=20,alpha=.1,verbose=F){
+  P=ncol(Y)
+  TT=nrow(Y)
+  Y_orig=Y
+  
+  # best_loss <- NULL
+  # best_s <- NULL
+  # best_W = NULL
+  
+  W=matrix(1/P,nrow=K,ncol=P)
+  W_old=W
+  
+  v1=rep(0,TT)
+  
+  zeta=zeta0
+  
+  #s=initialize_states(Y,K)
+  # Ymedoids=cluster::pam(Y,k=K)
+  # s=Ymedoids$clustering
+  # Ymedoids=Ymedoids$medoids
+  s=sample(1:K,TT,replace = T)
+  
+  for (outer in 1:n_outer){
+    
+    ## Clustering
+    #for(inner in 1:n_inner){
+    
+    #Compute distances
+    DW=weight_inv_exp_dist(Y,
+                           s,
+                           W,zeta)
+    medoids=cluster::pam(x=DW,k=K,diss=TRUE)
+    Ymedoids=Y[medoids$medoids,]
+    s=medoids$clustering
+    
+    # Compute weights
+    
+    Spk=WCD(s,Y,K)
+    wcd=exp(-Spk/zeta0)
+    W=wcd/rowSums(wcd)
+    
+    # LOF
+    
+    for(i in 1:K){
+      indx=which(s==i)
+      Ys=Y[indx,]
+      wYs=sweep(Ys, 2, W[i,], `*`)
+      v1[indx]=v_1(wYs,knn=5,c=2)
+      v2[indx]=v_1(Ys,knn=5,c=2)
+      v1[indx]=pmin(v1[indx],v2[indx])
+      Ys=sweep(Ys, 1, v1[indx], `*`)
+      Y[indx,]=Ys
+    }
+    
+    
+    #}
+    
+    eps_W=mean((W-W_old)^2)
+    if (!is.null(tol)) {
+      if (eps_W < tol) {
+        break
+      }
+    }
+    
+    W_old=W
+    zeta=zeta+alpha*zeta0
+    
+    print(W)
+    # print(zeta)
+    # print(Spk)
+    # print(zeta0)
+    # print(range(DW))
+    
+    if (verbose) {
+      cat(sprintf('Outer iteration %d: %.6e\n', outer, eps_W))
+    }
+    
+  }
+  return(list(W=W,s=s,medoids=medoids,v1=v1))
 }
 
 plot_W=function(W){

@@ -220,8 +220,8 @@ sim_data_stud_t=function(seed=123,
 #   return(Y_noised)
 # }
 
-zeta0=0.02
-alpha=1
+zeta0=0.3
+alpha=.1
 K=2
 tol=1e-9
 n_outer=15
@@ -239,7 +239,7 @@ simDat=sim_data_stud_t(seed=123,
                        rho=0,
                        nu=100,
                        phi=.8,
-                       pers=0.95)
+                       pers=0)
 
 Y=simDat$SimData
 true_stat=simDat$mchain
@@ -395,7 +395,7 @@ v_1=function(x,knn,c=2,M=NULL){
   return(v)
 }
 
-robust_COSA=function(Y,zeta0,K,tol,n_outer=20,alpha=.1,verbose=F){
+robust_COSA=function(Y,zeta0,K,tol,n_outer=20,alpha=.1,verbose=F,trim_lev=.1){
   P=ncol(Y)
   TT=nrow(Y)
   Y_orig=Y
@@ -407,7 +407,7 @@ robust_COSA=function(Y,zeta0,K,tol,n_outer=20,alpha=.1,verbose=F){
   W=matrix(1/P,nrow=K,ncol=P)
   W_old=W
   
-  v1=rep(0,TT)
+  #v1=rep(0,TT)
   
   zeta=zeta0
   
@@ -426,9 +426,17 @@ robust_COSA=function(Y,zeta0,K,tol,n_outer=20,alpha=.1,verbose=F){
     DW=weight_inv_exp_dist(Y,
                            s,
                            W,zeta)
+    
+    # k med
     medoids=cluster::pam(x=DW,k=K,diss=TRUE)
-    Ymedoids=Y[medoids$medoids,]
+    indx_med=medoids$medoids
+    Ymedoids=Y[indx_med,]
     s=medoids$clustering
+    
+    # fuzzy k med
+    # fkm=fclust::FKM.med (Y, k=K, m=1.5)
+    # indx_med=fkm$medoid
+    # Ymedoids=Y[fkm$medoid,]
     
     # Compute weights
     
@@ -436,18 +444,33 @@ robust_COSA=function(Y,zeta0,K,tol,n_outer=20,alpha=.1,verbose=F){
     wcd=exp(-Spk/zeta0)
     W=wcd/rowSums(wcd)
     
+    # Trimming
+    # Numero totale di osservazioni da escludere
+    n_trim <- ceiling(TT * trim_lev)
+    
+    # Calcola la distanza di ogni osservazione dal proprio medoide
+    d_from_medoid <- sapply(1:TT, function(i) {
+      cluster <- s[i]
+      medoid_index <- indx_med[cluster]
+      DW[i, medoid_index]
+    })
+    
+    # Ordina le distanze decrescenti e prendi gli n_trim indici più lontani
+    indx_trim <- order(d_from_medoid, decreasing = TRUE)[1:n_trim]
+    
+    
     # LOF
     
-    for(i in 1:K){
-      indx=which(s==i)
-      Ys=Y[indx,]
-      wYs=sweep(Ys, 2, W[i,], `*`)
-      v1[indx]=v_1(wYs,knn=5,c=2)
-      v2[indx]=v_1(Ys,knn=5,c=2)
-      v1[indx]=pmin(v1[indx],v2[indx])
-      Ys=sweep(Ys, 1, v1[indx], `*`)
-      Y[indx,]=Ys
-    }
+    # for(i in 1:K){
+    #   indx=which(s==i)
+    #   Ys=Y[indx,]
+    #   wYs=sweep(Ys, 2, W[i,], `*`)
+    #   v1[indx]=v_1(wYs,knn=5,c=2)
+    #   v2[indx]=v_1(Ys,knn=5,c=2)
+    #   v1[indx]=pmin(v1[indx],v2[indx])
+    #   Ys=sweep(Ys, 1, v1[indx], `*`)
+    #   Y[indx,]=Ys
+    # }
     
     
     #}

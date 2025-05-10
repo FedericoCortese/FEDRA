@@ -305,7 +305,7 @@ for (i in 1:P) {
 }
 
 
-COSA=function(Y,zeta0,K,tol,n_outer=20,alpha=.1,verbose=F){
+COSA=function(Y,zeta0,K,tol=NULL,n_outer=20,alpha=.1,verbose=F){
   P=ncol(Y)
   TT=nrow(Y)
   
@@ -355,11 +355,11 @@ COSA=function(Y,zeta0,K,tol,n_outer=20,alpha=.1,verbose=F){
     W_old=W
     zeta=zeta+alpha*zeta0
     
-    # print(W)
-    # print(zeta)
-    print(Spk)
-    print(zeta0)
-    print(range(DW))
+    print(W)
+    print(zeta)
+    # print(Spk)
+    # print(zeta0)
+    # print(range(DW))
     
     if (verbose) {
       cat(sprintf('Outer iteration %d: %.6e\n', outer, eps_W))

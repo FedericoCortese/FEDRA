@@ -150,6 +150,7 @@ load("C:/Users/federico/OneDrive - CNR/Brancati-Cortese/data and results/data_fe
 data_features_all_2=data_features_all[,-grep("iowa|bart",colnames(data_features_all))]
 features_k29=subset(data_features_all_2, select = -c(IDK, GRP))
 
+library(tclust)
 
 n <- dim(features_k29)[1]
 ctl_large=ctlcurves(features_k29, k = 2:6, alpha = (0:10) / n,
@@ -162,7 +163,7 @@ plot(
 
 # alpha=4%, K=4
 tc_large=tclust(
-  features_k29, k = 4, alpha = 0.02, nstart = 100,restr.fact = 12,opt='MIXT'
+  features_k29, k = 4, alpha = 0.04, nstart = 100,restr.fact = 12,opt='MIXT'
 )
 
 # Cluster assignements

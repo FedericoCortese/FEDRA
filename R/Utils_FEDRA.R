@@ -556,7 +556,7 @@ COSA_gap=function(Y,
     results_list <- foreach(i = 1:nrow(grid), .combine = 'list',
                             .packages = c("cluster"),
                             .multicombine = TRUE,
-                            .export = c("Y","COSA_hd", "WCD", "weight_inv_exp_dist",
+                            .export = c("Y","COSA_hd", "WCD", "weight_inv_exp_dist","weight_inv_exp_dist_medoids",
                                         "initialize_states",
                                         "grid", "tol", "n_outer", "alpha","Ts")) %dopar% {
                                           K_val <- grid$K[i]

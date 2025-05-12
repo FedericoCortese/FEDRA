@@ -613,7 +613,7 @@ COSA_gap=function(Y,
 
 temp=COSA_gap(Y,zeta_grid=seq(0.1,1,length.out=10),
                   K_grid=2:3,
-                  tol=1e-7,n_outer=10,alpha=.1,verbose=F,
+                  tol=1e-6,n_outer=10,alpha=.1,verbose=F,
                   B=10,Ts=round(TT*.2),n_cores=20)
 
 ggplot2::ggplot(temp$gap_stats, aes(x = zeta0, y = GAP, color = factor(K), group = K)) +

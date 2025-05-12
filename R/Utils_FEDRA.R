@@ -179,6 +179,31 @@ WCD=function(s,Y,K){
   
 }
 
+library(DescTools)
+
+lof_star=function(x,knn){
+  lof_x=DescTools::LOF(x, knn)
+  mean_lof=mean(lof_x)
+  sd_lof=sd(lof_x)
+  lof_st=(lof_x-mean_lof)/sd_lof
+  return(lof_st)
+}
+
+v_1=function(x,knn=10,c=2,M=NULL){
+  
+  lof_st=lof_star(x,knn)
+  
+  if(is.null(M)){
+    M=median(lof_st)+mad(lof_st)
+  }
+  
+  v=rep(1,dim(x)[1])
+  v[lof_st>=c]=0
+  indx=which(M<lof_st&lof_st<c)
+  v[indx]=(1-((lof_st[indx]-M)/(c-M))^2)^2
+  return(v)
+}
+
 sim_data_stud_t=function(seed=123,
                          TT,
                          P,
@@ -354,6 +379,9 @@ for (i in 1:P) {
 
 
 COSA=function(Y,zeta0,K,tol=NULL,n_outer=20,alpha=.1,verbose=F){
+  
+  # Simple version of COSA (no outlier detection)
+  
   P=ncol(Y)
   TT=nrow(Y)
   
@@ -419,6 +447,78 @@ COSA=function(Y,zeta0,K,tol=NULL,n_outer=20,alpha=.1,verbose=F){
   
   return(list(W=W,s=s,medoids=medoids,w_loss=w_loss))
 }
+
+robust_COSA=function(Y,zeta0,K,tol=NULL,n_outer=20,alpha=.1,verbose=F,knn=10,c=2,M=NULL){
+  
+  # Robust version of COSA
+  
+  P=ncol(Y)
+  TT=nrow(Y)
+  
+  # best_loss <- NULL
+  # best_s <- NULL
+  # best_W = NULL
+  
+  W=matrix(1/P,nrow=K,ncol=P)
+  W_old=W
+  
+  zeta=zeta0
+  
+  s=initialize_states(Y,K)
+  
+  for (outer in 1:n_outer){
+    
+    ## Clustering
+    #for(inner in 1:n_inner){
+    
+    v1=v_1(W[s,]*Y,knn=knn,c=c,M=M)
+    v2=v_1(Y,knn=knn,c=c,M=M)
+    
+    v=apply(cbind(v1,v2),1,min)
+    
+    #Compute distances
+    DW=weight_inv_exp_dist(Y * v,
+                           s,
+                           W,zeta)
+    medoids=cluster::pam(x=DW,k=K,diss=TRUE)
+    #Ymedoids=Y[medoids$medoids,]
+    s=medoids$clustering
+    
+    # Compute weights
+    
+    Spk=WCD(s,Y * v,K)
+    wcd=exp(-Spk/zeta0)
+    W=wcd/rowSums(wcd)
+    
+    #}
+    
+    w_loss=sum(W*Spk)  
+    eps_W=mean((W-W_old)^2)
+    if (!is.null(tol)) {
+      if (eps_W < tol) {
+        break
+      }
+    }
+    
+    W_old=W
+    zeta=zeta+alpha*zeta0
+    
+    # print(W)
+    # print(zeta)
+    # print(Spk)
+    # print(zeta0)
+    # print(range(DW))
+    
+    if (verbose) {
+      cat(sprintf('Outer iteration %d: %.6e\n', outer, eps_W))
+    }
+    
+  }
+  
+  
+  return(list(W=W,s=s,medoids=medoids,w_loss=w_loss,v=v))
+}
+
 
 COSA_hd=function(Y,zeta0,K,tol=NULL,n_outer=20,alpha=.1,verbose=F,Ts=NULL){
   P=ncol(Y)
@@ -501,7 +601,7 @@ COSA_gap=function(Y,
                   zeta_grid=seq(0,1,.1),
                   K_grid=2:6,
                   tol=NULL,n_outer=20,alpha=.1,verbose=F,n_cores=NULL,
-                  B=10, Ts=NULL){
+                  B=10, Ts=NULL,knn=10,c=2,M=NULL){
   
   # B is the number of permutations
   # Ts is the sample size for the subsampling (as in CLARA), if NULL it uses the full sample
@@ -523,9 +623,11 @@ COSA_gap=function(Y,
     results_list <- foreach(i = 1:nrow(grid), .combine = 'list',
                             .packages = c("cluster"),
                             .multicombine = TRUE,
-                            .export = c("Y", "COSA", "WCD", "weight_inv_exp_dist",
+                            .export = c("Y", "robust_COSA", "WCD", "weight_inv_exp_dist",
                                         "initialize_states",
-                                        "grid", "tol", "n_outer", "alpha")) %dopar% {
+                                        "v_1","lof_star",
+                                        "grid", "tol", "n_outer", "alpha",
+                                        "knn","c","M")) %dopar% {
                                           K_val <- grid$K[i]
                                           zeta_val <- grid$zeta0[i]
                                           b <- grid$b[i]
@@ -540,21 +642,23 @@ COSA_gap=function(Y,
                                             permuted <- TRUE
                                           }
                                           
-                                          res <- COSA(Y_input, zeta0 = zeta_val, K = K_val, tol = tol,
-                                                      n_outer = n_outer, alpha = alpha, verbose = FALSE)
+                                          res <- robust_COSA(Y_input, zeta0 = zeta_val, K = K_val, tol = tol,
+                                                      n_outer = n_outer, alpha = alpha, verbose = FALSE,
+                                                      knn=knn,c=c,M=M)
                                           
                                           list(
                                             meta = data.frame(K = K_val, zeta0 = zeta_val, 
                                                               loss = res$w_loss, permuted = permuted),
                                             cosa = if (!permuted) list(K = K_val, zeta0 = zeta_val, 
                                                                        W = res$W, s = res$s, 
-                                                                       medoids = res$medoids$medoids) else NULL
+                                                                       medoids = res$medoids$medoids,
+                                                                       v=res$v) else NULL
                                           )
                                         }
   }
   else{
     results_list <- foreach(i = 1:nrow(grid), .combine = 'list',
-                            .packages = c("cluster"),
+                            .packages = c("cluster","DescTools"),
                             .multicombine = TRUE,
                             .export = c("Y","COSA_hd", "WCD", "weight_inv_exp_dist","weight_inv_exp_dist_medoids",
                                         "initialize_states",
@@ -614,10 +718,10 @@ COSA_gap=function(Y,
   
 }
 
-temp=COSA_gap(Y,zeta_grid=seq(0.1,1,length.out=10),
+temp=COSA_gap(Y,zeta_grid=seq(0.1,1,length.out=2),
                   K_grid=2:3,
-                  tol=1e-6,n_outer=10,alpha=.1,verbose=F,
-                  B=10,Ts=round(TT*.2),n_cores=20)
+                  tol=1e-4,n_outer=10,alpha=.1,verbose=F,
+                  B=2,Ts=NULL,n_cores=3)
 
 ggplot2::ggplot(temp$gap_stats, aes(x = zeta0, y = GAP, color = factor(K), group = K)) +
   geom_line(size = 1) +
@@ -632,140 +736,13 @@ ggplot2::ggplot(temp$gap_stats, aes(x = zeta0, y = GAP, color = factor(K), group
   theme(text = element_text(size = 13))
 
 
-temp_hd=COSA_hd(Y,.1,2,tol=1e-7,n_outer=10,alpha=.1,verbose=F,
+temp_hd=COSA_hd(Y,.1,2,tol=1e-4,n_outer=10,alpha=.1,verbose=F,
                 Ts=round(TT*.2))
 
 table(temp_hd$s,simDat$mchain)
 round(temp_hd$W,3)
 
-library(DescTools)
 
-lof_star=function(x,knn){
-  lof_x=DescTools::LOF(x, knn)
-  mean_lof=mean(lof_x)
-  sd_lof=sd(lof_x)
-  lof_st=(lof_x-mean_lof)/sd_lof
-  return(lof_st)
-}
-
-v_1=function(x,knn,c=2,M=NULL){
-  
-  lof_st=lof_star(x,knn)
-  
-  if(is.null(M)){
-    M=median(lof_st)+mad(lof_st)
-  }
-  
-  v=rep(1,dim(x)[1])
-  v[lof_st>=c]=0
-  indx=which(M<lof_st&lof_st<c)
-  v[indx]=(1-((lof_st[indx]-M)/(c-M))^2)^2
-  return(v)
-}
-
-robust_COSA=function(Y,zeta0,K,tol,n_outer=20,alpha=.1,verbose=F,trim_lev=.1){
-  P=ncol(Y)
-  TT=nrow(Y)
-  Y_orig=Y
-  
-  # best_loss <- NULL
-  # best_s <- NULL
-  # best_W = NULL
-  
-  W=matrix(1/P,nrow=K,ncol=P)
-  W_old=W
-  
-  #v1=rep(0,TT)
-  
-  zeta=zeta0
-  
-  #s=initialize_states(Y,K)
-  # Ymedoids=cluster::pam(Y,k=K)
-  # s=Ymedoids$clustering
-  # Ymedoids=Ymedoids$medoids
-  s=sample(1:K,TT,replace = T)
-  
-  for (outer in 1:n_outer){
-    
-    ## Clustering
-    #for(inner in 1:n_inner){
-    
-    #Compute distances
-    DW=weight_inv_exp_dist(Y,
-                           s,
-                           W,zeta)
-    
-    # k med
-    medoids=cluster::pam(x=DW,k=K,diss=TRUE)
-    indx_med=medoids$medoids
-    Ymedoids=Y[indx_med,]
-    s=medoids$clustering
-    
-    # fuzzy k med
-    # fkm=fclust::FKM.med (Y, k=K, m=1.5)
-    # indx_med=fkm$medoid
-    # Ymedoids=Y[fkm$medoid,]
-    
-    # Compute weights
-    
-    Spk=WCD(s,Y,K)
-    wcd=exp(-Spk/zeta0)
-    W=wcd/rowSums(wcd)
-    
-    # Trimming
-    # Numero totale di osservazioni da escludere
-    n_trim <- ceiling(TT * trim_lev)
-    
-    # Calcola la distanza di ogni osservazione dal proprio medoide
-    d_from_medoid <- sapply(1:TT, function(i) {
-      cluster <- s[i]
-      medoid_index <- indx_med[cluster]
-      DW[i, medoid_index]
-    })
-    
-    # Ordina le distanze decrescenti e prendi gli n_trim indici più lontani
-    indx_trim <- order(d_from_medoid, decreasing = TRUE)[1:n_trim]
-    
-    
-    # LOF
-    
-    # for(i in 1:K){
-    #   indx=which(s==i)
-    #   Ys=Y[indx,]
-    #   wYs=sweep(Ys, 2, W[i,], `*`)
-    #   v1[indx]=v_1(wYs,knn=5,c=2)
-    #   v2[indx]=v_1(Ys,knn=5,c=2)
-    #   v1[indx]=pmin(v1[indx],v2[indx])
-    #   Ys=sweep(Ys, 1, v1[indx], `*`)
-    #   Y[indx,]=Ys
-    # }
-    
-    
-    #}
-    
-    eps_W=mean((W-W_old)^2)
-    if (!is.null(tol)) {
-      if (eps_W < tol) {
-        break
-      }
-    }
-    
-    W_old=W
-    zeta=zeta+alpha*zeta0
-    
-    print(W)
-    # print(zeta)
-    # print(Spk)
-    # print(zeta0)
-    # print(range(DW))
-    
-    if (verbose) {
-      cat(sprintf('Outer iteration %d: %.6e\n', outer, eps_W))
-    }
-    
-  }
-  return(list(W=W,s=s,medoids=medoids,v1=v1))
-}
 
 plot_W=function(W){
   library(reshape)

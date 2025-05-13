@@ -608,10 +608,10 @@ COSA_hd=function(Y,zeta0,K,tol=NULL,n_outer=20,alpha=.1,verbose=F,Ts=NULL){
 }
 
 COSA_gap=function(Y,
-                  zeta_grid=seq(0,1,.1),
+                  zeta_grid=seq(0.01,1,.1),
                   K_grid=2:6,
                   tol=NULL,n_outer=20,alpha=.1,verbose=F,n_cores=NULL,
-                  B=10, Ts=NULL,knn=10,c=2,M=NULL){
+                  B=10,knn=10,c=2,M=NULL){
   
   # B is the number of permutations
 
@@ -626,13 +626,14 @@ COSA_gap=function(Y,
   
   # Set up cluster
   cl <- makeCluster(n_cores)
+  
   registerDoParallel(cl)
   
     results_list <- foreach(i = 1:nrow(grid), .combine = 'list',
-                            .packages = c("cluster","Rcpp"),
+                            .packages = c("cluster","Rcpp","DescTools"),
                             .multicombine = TRUE,
                             .export = c("Y", "robust_COSA", 
-                                        #"WCD", "weight_inv_exp_dist",
+                                        "WCD", "weight_inv_exp_dist",
                                         "initialize_states",
                                         "v_1","lof_star",
                                         "grid", "tol", "n_outer", "alpha",
@@ -695,7 +696,7 @@ COSA_gap=function(Y,
 temp=COSA_gap(Y,zeta_grid=seq(0.1,1,length.out=4),
                   K_grid=2:4,
                   tol=1e-4,n_outer=10,alpha=.1,verbose=F,
-                  B=10,Ts=NULL,n_cores=3)
+                  B=10,n_cores=3)
 
 library(ggplot2)
 ggplot(temp$gap_stats, aes(x = zeta0, y = GAP, color = factor(K), group = K)) +

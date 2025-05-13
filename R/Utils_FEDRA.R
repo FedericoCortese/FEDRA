@@ -22,56 +22,56 @@ initialize_states <- function(Y, K) {
   return(init_stats)
 }
 
-weight_inv_exp_dist <- function(Y,
-                                #Ymedoids,
-                                #index_medoids, 
-                                s, 
-                                W, zeta) {
-  TT <- nrow(Y)
-  P <- ncol(Y)
-  
-  # 1. Normalizzazione Gower
-  # range_Y <- apply(Y, 2, function(col) {
-  #   r <- max(col) - min(col)
-  #   if (r == 0) 1 else r
-  # })
-  
-  sk=apply(Y,2,function(x)IQR(x)/1.35)
-  
-  # 2. Genera indici delle coppie (i < j)
-  pairs <- combn(TT, 2)
-  i_idx <- pairs[1, ]
-  j_idx <- pairs[2, ]
-  n_pairs <- ncol(pairs)
-
-  # 3. Estrai le righe corrispondenti
-  Yi <- Y[i_idx, , drop = FALSE]
-  Yj <- Y[j_idx, , drop = FALSE]
-  diff <- abs(Yi - Yj)
-  #sk=apply(diff,2,function(x)sum(x)/TT^2)
-  
-  diff=sweep(diff, 2, sk, FUN = "/")
-  #diff=sweep(diff, 2, range_Y, FUN = "/")
-  
-
-  # 4. Estrai direttamente i pesi W[si, ] e W[sj, ] in blocco
-  W_si <- W[s[i_idx], , drop = FALSE]
-  W_sj <- W[s[j_idx], , drop = FALSE]
-  # W_si <- W[i_idx, , drop = FALSE]
-  # W_sj <- W[j_idx, , drop = FALSE]
-  max_w <- pmax(W_si, W_sj)
-  
-  # 5. Calcola la distanza finale
-  weighted_exp <- exp(-diff / zeta) * max_w
-  dist_vals <- -zeta * log(rowSums(weighted_exp))
-  
-  # 6. Ricostruzione della matrice simmetrica
-  mat <- matrix(0, TT, TT)
-  mat[cbind(i_idx, j_idx)] <- dist_vals
-  mat[cbind(j_idx, i_idx)] <- dist_vals
-  
-  return(mat)
-}
+# weight_inv_exp_dist <- function(Y,
+#                                 #Ymedoids,
+#                                 #index_medoids, 
+#                                 s, 
+#                                 W, zeta) {
+#   TT <- nrow(Y)
+#   P <- ncol(Y)
+#   
+#   # 1. Normalizzazione Gower
+#   # range_Y <- apply(Y, 2, function(col) {
+#   #   r <- max(col) - min(col)
+#   #   if (r == 0) 1 else r
+#   # })
+#   
+#   sk=apply(Y,2,function(x)IQR(x)/1.35)
+#   
+#   # 2. Genera indici delle coppie (i < j)
+#   pairs <- combn(TT, 2)
+#   i_idx <- pairs[1, ]
+#   j_idx <- pairs[2, ]
+#   n_pairs <- ncol(pairs)
+# 
+#   # 3. Estrai le righe corrispondenti
+#   Yi <- Y[i_idx, , drop = FALSE]
+#   Yj <- Y[j_idx, , drop = FALSE]
+#   diff <- abs(Yi - Yj)
+#   #sk=apply(diff,2,function(x)sum(x)/TT^2)
+#   
+#   diff=sweep(diff, 2, sk, FUN = "/")
+#   #diff=sweep(diff, 2, range_Y, FUN = "/")
+#   
+# 
+#   # 4. Estrai direttamente i pesi W[si, ] e W[sj, ] in blocco
+#   W_si <- W[s[i_idx], , drop = FALSE]
+#   W_sj <- W[s[j_idx], , drop = FALSE]
+#   # W_si <- W[i_idx, , drop = FALSE]
+#   # W_sj <- W[j_idx, , drop = FALSE]
+#   max_w <- pmax(W_si, W_sj)
+#   
+#   # 5. Calcola la distanza finale
+#   weighted_exp <- exp(-diff / zeta) * max_w
+#   dist_vals <- -zeta * log(rowSums(weighted_exp))
+#   
+#   # 6. Ricostruzione della matrice simmetrica
+#   mat <- matrix(0, TT, TT)
+#   mat[cbind(i_idx, j_idx)] <- dist_vals
+#   mat[cbind(j_idx, i_idx)] <- dist_vals
+#   
+#   return(mat)
+# }
 
 # WCD=function(s,Y,K){
 #   Tk=table(s)
@@ -136,48 +136,48 @@ weight_inv_exp_dist_medoids <- function(Y, Ymedoids, s, W, zeta) {
   return(mat)  # matrice T x K
 }
 
-WCD=function(s,Y,K){
-  #TT <- nrow(Y)
-  P <- ncol(Y)
-  
-  wcd=matrix(0,nrow=K,ncol=P)
-  
-  # 1. Normalizzazione Gower
-  # range_Y <- apply(Y, 2, function(col) {
-  #   r <- max(col) - min(col)
-  #   if (r == 0) 1 else r
-  # })
-  sk=apply(Y,2,function(x)IQR(x)/1.35)
-  
-  for(i in 1:K){
-    Ys=Y[s==i,]
-    TTk <- nrow(Ys)
-    pairs <- combn(TTk, 2)
-    i_idx <- pairs[1, ]
-    j_idx <- pairs[2, ]
-    n_pairs <- ncol(pairs)
-    
-    Yi <- Ys[i_idx, , drop = FALSE]
-    Yj <- Ys[j_idx, , drop = FALSE]
-    diff <- abs(Yi - Yj)
-    #sk=apply(diff,2,function(x)sum(x)/TTk^2)
-    
-    diff=sweep(diff, 2, sk, FUN = "/")
-   # diff=sweep(diff, 2, range_Y, FUN = "/")
-    
-    for(p in 1:P){
-      mat <- matrix(0, TTk, TTk)
-      mat[cbind(i_idx, j_idx)] <- diff[,p]
-      mat[cbind(j_idx, i_idx)] <- diff[,p]
-      wcd[i,p]=mean(apply(mat,1,median))
-    }
-    # 
-    #wcd[i,]=colSums(diff)/TTk^2
-    #wcd[i,]=apply(diff,2,median)/TTk
-  }
-  return(wcd)
-  
-}
+# WCD=function(s,Y,K){
+#   #TT <- nrow(Y)
+#   P <- ncol(Y)
+#   
+#   wcd=matrix(0,nrow=K,ncol=P)
+#   
+#   # 1. Normalizzazione Gower
+#   # range_Y <- apply(Y, 2, function(col) {
+#   #   r <- max(col) - min(col)
+#   #   if (r == 0) 1 else r
+#   # })
+#   sk=apply(Y,2,function(x)IQR(x)/1.35)
+#   
+#   for(i in 1:K){
+#     Ys=Y[s==i,]
+#     TTk <- nrow(Ys)
+#     pairs <- combn(TTk, 2)
+#     i_idx <- pairs[1, ]
+#     j_idx <- pairs[2, ]
+#     n_pairs <- ncol(pairs)
+#     
+#     Yi <- Ys[i_idx, , drop = FALSE]
+#     Yj <- Ys[j_idx, , drop = FALSE]
+#     diff <- abs(Yi - Yj)
+#     #sk=apply(diff,2,function(x)sum(x)/TTk^2)
+#     
+#     diff=sweep(diff, 2, sk, FUN = "/")
+#    # diff=sweep(diff, 2, range_Y, FUN = "/")
+#     
+#     for(p in 1:P){
+#       mat <- matrix(0, TTk, TTk)
+#       mat[cbind(i_idx, j_idx)] <- diff[,p]
+#       mat[cbind(j_idx, i_idx)] <- diff[,p]
+#       wcd[i,p]=mean(apply(mat,1,median))
+#     }
+#     # 
+#     #wcd[i,]=colSums(diff)/TTk^2
+#     #wcd[i,]=apply(diff,2,median)/TTk
+#   }
+#   return(wcd)
+#   
+# }
 
 library(DescTools)
 
@@ -203,6 +203,13 @@ v_1=function(x,knn=10,c=2,M=NULL){
   v[indx]=(1-((lof_st[indx]-M)/(c-M))^2)^2
   return(v)
 }
+
+# Rcpp --------------------------------------------------------------------
+
+library(Rcpp)
+Rcpp::sourceCpp("weight_inv_exp_dist.cpp")
+Rcpp::sourceCpp("wcd.cpp")
+
 
 sim_data_stud_t=function(seed=123,
                          TT,
@@ -451,6 +458,9 @@ COSA=function(Y,zeta0,K,tol=NULL,n_outer=20,alpha=.1,verbose=F){
 robust_COSA=function(Y,zeta0,K,tol=NULL,n_outer=20,alpha=.1,verbose=F,knn=10,c=2,M=NULL){
   
   # Robust version of COSA
+  library(Rcpp)
+  Rcpp::sourceCpp("weight_inv_exp_dist.cpp")
+  Rcpp::sourceCpp("wcd.cpp")
   
   P=ncol(Y)
   TT=nrow(Y)
@@ -477,7 +487,7 @@ robust_COSA=function(Y,zeta0,K,tol=NULL,n_outer=20,alpha=.1,verbose=F,knn=10,c=2
     v=apply(cbind(v1,v2),1,min)
     
     #Compute distances
-    DW=weight_inv_exp_dist(Y * v,
+    DW=weight_inv_exp_dist(as.matrix(Y * v),
                            s,
                            W,zeta)
     medoids=cluster::pam(x=DW,k=K,diss=TRUE)
@@ -486,7 +496,7 @@ robust_COSA=function(Y,zeta0,K,tol=NULL,n_outer=20,alpha=.1,verbose=F,knn=10,c=2
     
     # Compute weights
     
-    Spk=WCD(s,Y * v,K)
+    Spk=WCD(s,as.matrix(Y * v),K)
     wcd=exp(-Spk/zeta0)
     W=wcd/rowSums(wcd)
     
@@ -621,9 +631,10 @@ COSA_gap=function(Y,
   
   if(is.null(Ts)){
     results_list <- foreach(i = 1:nrow(grid), .combine = 'list',
-                            .packages = c("cluster"),
+                            .packages = c("cluster","Rcpp"),
                             .multicombine = TRUE,
-                            .export = c("Y", "robust_COSA", "WCD", "weight_inv_exp_dist",
+                            .export = c("Y", "robust_COSA", 
+                                        #"WCD", "weight_inv_exp_dist",
                                         "initialize_states",
                                         "v_1","lof_star",
                                         "grid", "tol", "n_outer", "alpha",
@@ -718,10 +729,10 @@ COSA_gap=function(Y,
   
 }
 
-temp=COSA_gap(Y,zeta_grid=seq(0.1,1,length.out=2),
-                  K_grid=2:3,
+temp=COSA_gap(Y,zeta_grid=seq(0.1,1,length.out=4),
+                  K_grid=2:4,
                   tol=1e-4,n_outer=10,alpha=.1,verbose=F,
-                  B=2,Ts=NULL,n_cores=3)
+                  B=10,Ts=NULL,n_cores=3)
 
 ggplot2::ggplot(temp$gap_stats, aes(x = zeta0, y = GAP, color = factor(K), group = K)) +
   geom_line(size = 1) +

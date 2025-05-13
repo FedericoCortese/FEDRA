@@ -206,9 +206,9 @@ v_1=function(x,knn=10,c=2,M=NULL){
 
 # Rcpp --------------------------------------------------------------------
 
-library(Rcpp)
-Rcpp::sourceCpp("weight_inv_exp_dist.cpp")
-Rcpp::sourceCpp("wcd.cpp")
+# library(Rcpp)
+# Rcpp::sourceCpp("weight_inv_exp_dist.cpp")
+# Rcpp::sourceCpp("wcd.cpp")
 
 
 sim_data_stud_t=function(seed=123,
@@ -614,8 +614,7 @@ COSA_gap=function(Y,
                   B=10, Ts=NULL,knn=10,c=2,M=NULL){
   
   # B is the number of permutations
-  # Ts is the sample size for the subsampling (as in CLARA), if NULL it uses the full sample
-  
+
   grid <- expand.grid(K = K_grid, zeta0 = zeta_grid, b = 0:B)
   
   library(foreach)
@@ -629,7 +628,6 @@ COSA_gap=function(Y,
   cl <- makeCluster(n_cores)
   registerDoParallel(cl)
   
-  if(is.null(Ts)){
     results_list <- foreach(i = 1:nrow(grid), .combine = 'list',
                             .packages = c("cluster","Rcpp"),
                             .multicombine = TRUE,
@@ -666,41 +664,6 @@ COSA_gap=function(Y,
                                                                        v=res$v) else NULL
                                           )
                                         }
-  }
-  else{
-    results_list <- foreach(i = 1:nrow(grid), .combine = 'list',
-                            .packages = c("cluster","DescTools"),
-                            .multicombine = TRUE,
-                            .export = c("Y","COSA_hd", "WCD", "weight_inv_exp_dist","weight_inv_exp_dist_medoids",
-                                        "initialize_states",
-                                        "grid", "tol", "n_outer", "alpha","Ts")) %dopar% {
-                                          K_val <- grid$K[i]
-                                          zeta_val <- grid$zeta0[i]
-                                          b <- grid$b[i]
-                                          
-                                          set.seed(b + 1000 * i)
-                                          
-                                          if (b == 0) {
-                                            Y_input <- Y
-                                            permuted <- FALSE
-                                          } else {
-                                            Y_input <- apply(Y, 2, sample)
-                                            permuted <- TRUE
-                                          }
-                                          
-                                          res <- COSA_hd(Y_input, zeta0 = zeta_val, K = K_val, tol = tol,
-                                                      n_outer = n_outer, alpha = alpha, verbose = FALSE,
-                                                      Ts=Ts)
-                                          
-                                          list(
-                                            meta = data.frame(K = K_val, zeta0 = zeta_val, 
-                                                              loss = res$w_loss, permuted = permuted),
-                                            cosa = if (!permuted) list(K = K_val, zeta0 = zeta_val, 
-                                                                       W = res$W, s = res$s, 
-                                                                       medoids = res$medoids$medoids) else NULL
-                                          )
-                                        }
-  }
   
   
   stopCluster(cl)
@@ -734,7 +697,8 @@ temp=COSA_gap(Y,zeta_grid=seq(0.1,1,length.out=4),
                   tol=1e-4,n_outer=10,alpha=.1,verbose=F,
                   B=10,Ts=NULL,n_cores=3)
 
-ggplot2::ggplot(temp$gap_stats, aes(x = zeta0, y = GAP, color = factor(K), group = K)) +
+library(ggplot2)
+ggplot(temp$gap_stats, aes(x = zeta0, y = GAP, color = factor(K), group = K)) +
   geom_line(size = 1) +
   geom_point(size = 2) +
   labs(

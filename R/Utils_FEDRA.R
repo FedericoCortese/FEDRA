@@ -300,89 +300,6 @@ sim_data_stud_t=function(seed=123,
 #   return(Y_noised)
 # }
 
-zeta0=0.3
-alpha=.1
-K=2
-tol=1e-9
-n_outer=15
-verbose=T
-
-TT=500
-P=10
-
-simDat=sim_data_stud_t(seed=123,
-                       TT=TT,
-                       P=P,
-                       Pcat=NULL,
-                       Ktrue=2,
-                       mu=5,
-                       rho=0,
-                       nu=100,
-                       phi=.8,
-                       pers=0.1)
-
-Y=simDat$SimData
-true_stat=simDat$mchain
-
-#plot(Y[,2],col=true_stat,pch=19)
-
-# feat_list=list()
-# feat_list[[1]]=1:10
-# feat_list[[2]]=5:15
-# feat_list[[3]]=10:20
-# Y_noised=apply_noise_by_cluster(Y,simDat$mchain,feat_list)
-# Y=Y_noised
-
-
-nu=4
-# State 1, only features 1,2 and 3 are relevant
-indx=which(true_stat!=1)
-Sigma <- matrix(0,ncol=P-3,nrow=P-3)
-diag(Sigma)=5
-Y[indx,-(1:3)]=mvtnorm::rmvt(length(indx), 
-                             sigma = (nu-2)*Sigma/nu, 
-                             df = nu, delta = rep(0,P-3))
-
-# State 2, only features 3,4 and 5 are relevant
-indx=which(true_stat!=2)
-Y[indx,-(3:5)]=mvtnorm::rmvt(length(indx), 
-                             sigma = (nu-2)*Sigma/nu, 
-                             df = nu, delta = rep(0,P-3))
-
-# # State 3, only features 5,6 and 7 are relevant
-# indx=which(true_stat!=3)
-# Y[indx,-(5:7)]=mvtnorm::rmvt(length(indx), 
-#                              sigma = (nu-2)*Sigma/nu, 
-#                              df = nu, delta = rep(0,P-3))
-
-# Other features are not relevant
-# Sigma <- matrix(0,ncol=5,nrow=5)
-# diag(Sigma)=5
-# Y[,6:10]=mvtnorm::rmvt(TT, 
-#                        sigma = (nu-2)*Sigma/nu, 
-#                        df = nu, delta = rep(0,5))
-
-Sigma <- matrix(0,ncol=P-5,nrow=P-5)
-diag(Sigma)=5
-Y[,6:P]=mvtnorm::rmvt(TT, 
-                       sigma = (nu-2)*Sigma/nu, 
-                       df = nu, delta = rep(0,P-5))
-
-
-# Introduce outliers
-set.seed(1)
-N_out=TT*0.02
-t_out=sample(1:TT,size=N_out)
-Y[t_out,]=Y[t_out,]+rnorm(N_out*P,0,10)
-
-truth=simDat$mchain
-truth[t_out]=0
-  
-x11()
-par(mfrow=c(4,3))
-for (i in 1:P) {
-  plot(Y[, i], col=truth+1, pch=19,ylab=i)
-}
 
 
 COSA=function(Y,zeta0,K,tol=NULL,n_outer=20,alpha=.1,verbose=F){
@@ -455,7 +372,8 @@ COSA=function(Y,zeta0,K,tol=NULL,n_outer=20,alpha=.1,verbose=F){
   return(list(W=W,s=s,medoids=medoids,w_loss=w_loss))
 }
 
-robust_COSA=function(Y,zeta0,K,tol=NULL,n_outer=20,alpha=.1,verbose=F,knn=10,c=2,M=NULL){
+robust_COSA=function(Y,zeta0,K,tol=NULL,
+                     n_outer=20,alpha=.1,verbose=F,knn=10,c=2,M=NULL){
   
   # Robust version of COSA
   library(Rcpp)
@@ -530,82 +448,82 @@ robust_COSA=function(Y,zeta0,K,tol=NULL,n_outer=20,alpha=.1,verbose=F,knn=10,c=2
 }
 
 
-COSA_hd=function(Y,zeta0,K,tol=NULL,n_outer=20,alpha=.1,verbose=F,Ts=NULL){
-  P=ncol(Y)
-  TT=nrow(Y)
-  
-  if(is.null(Ts)){
-    Ts=round(TT/2)
-  }
-  
-  # best_loss <- NULL
-  # best_s <- NULL
-  # best_W = NULL
-  
-  W=matrix(1/P,nrow=K,ncol=P)
-  W_old=W
-  
-  zeta=zeta0
-  
-  s=initialize_states(Y,K)
-  # Ymedoids=cluster::pam(Y,k=K)
-  # s=Ymedoids$clustering
-  # Ymedoids=Ymedoids$medoids
-  #s=sample(1:K,TT,replace = T)
-  
-  for (outer in 1:n_outer){
-    
-    subsample=sample(1:TT,Ts,replace = F)
-    Ys=Y[subsample,]
-    ss=s[subsample]
-    
-    ## Clustering
-    #for(inner in 1:n_inner){
-    
-    #Compute distances
-    DW_1=weight_inv_exp_dist(Ys,
-                             ss,
-                             W,zeta)
-    medoids=cluster::pam(x=DW_1,k=K,diss=TRUE)
-    Ymedoids=Ys[medoids$medoids,]
-    s=medoids$clustering
-    
-    loss_by_state=weight_inv_exp_dist_medoids(Y, Ymedoids, s, W, zeta)
-    s=apply(loss_by_state,1,which.min)
-    # Compute weights
-    
-    Spk=WCD(s,Y,K)
-    wcd=exp(-Spk/zeta0)
-    W=wcd/rowSums(wcd)
-    
-    #}
-    
-    w_loss=sum(W*Spk)  
-    eps_W=mean((W-W_old)^2)
-    if (!is.null(tol)) {
-      if (eps_W < tol) {
-        break
-      }
-    }
-    
-    W_old=W
-    zeta=zeta+alpha*zeta0
-    
-    # print(W)
-    # print(zeta)
-    # print(Spk)
-    # print(zeta0)
-    # print(range(DW))
-    
-    if (verbose) {
-      cat(sprintf('Outer iteration %d: %.6e\n', outer, eps_W))
-    }
-    
-  }
-  
-  
-  return(list(W=W,s=s,medoids=medoids,w_loss=w_loss))
-}
+# COSA_hd=function(Y,zeta0,K,tol=NULL,n_outer=20,alpha=.1,verbose=F,Ts=NULL){
+#   P=ncol(Y)
+#   TT=nrow(Y)
+#   
+#   if(is.null(Ts)){
+#     Ts=round(TT/2)
+#   }
+#   
+#   # best_loss <- NULL
+#   # best_s <- NULL
+#   # best_W = NULL
+#   
+#   W=matrix(1/P,nrow=K,ncol=P)
+#   W_old=W
+#   
+#   zeta=zeta0
+#   
+#   s=initialize_states(Y,K)
+#   # Ymedoids=cluster::pam(Y,k=K)
+#   # s=Ymedoids$clustering
+#   # Ymedoids=Ymedoids$medoids
+#   #s=sample(1:K,TT,replace = T)
+#   
+#   for (outer in 1:n_outer){
+#     
+#     subsample=sample(1:TT,Ts,replace = F)
+#     Ys=Y[subsample,]
+#     ss=s[subsample]
+#     
+#     ## Clustering
+#     #for(inner in 1:n_inner){
+#     
+#     #Compute distances
+#     DW_1=weight_inv_exp_dist(Ys,
+#                              ss,
+#                              W,zeta)
+#     medoids=cluster::pam(x=DW_1,k=K,diss=TRUE)
+#     Ymedoids=Ys[medoids$medoids,]
+#     s=medoids$clustering
+#     
+#     loss_by_state=weight_inv_exp_dist_medoids(Y, Ymedoids, s, W, zeta)
+#     s=apply(loss_by_state,1,which.min)
+#     # Compute weights
+#     
+#     Spk=WCD(s,Y,K)
+#     wcd=exp(-Spk/zeta0)
+#     W=wcd/rowSums(wcd)
+#     
+#     #}
+#     
+#     w_loss=sum(W*Spk)  
+#     eps_W=mean((W-W_old)^2)
+#     if (!is.null(tol)) {
+#       if (eps_W < tol) {
+#         break
+#       }
+#     }
+#     
+#     W_old=W
+#     zeta=zeta+alpha*zeta0
+#     
+#     # print(W)
+#     # print(zeta)
+#     # print(Spk)
+#     # print(zeta0)
+#     # print(range(DW))
+#     
+#     if (verbose) {
+#       cat(sprintf('Outer iteration %d: %.6e\n', outer, eps_W))
+#     }
+#     
+#   }
+#   
+#   
+#   return(list(W=W,s=s,medoids=medoids,w_loss=w_loss))
+# }
 
 COSA_gap=function(Y,
                   zeta_grid=seq(0.01,1,.1),
@@ -692,32 +610,6 @@ COSA_gap=function(Y,
   ))
   
 }
-
-temp=COSA_gap(Y,zeta_grid=seq(0.1,1,length.out=4),
-                  K_grid=2:4,
-                  tol=1e-4,n_outer=10,alpha=.1,verbose=F,
-                  B=10,n_cores=3)
-
-library(ggplot2)
-ggplot(temp$gap_stats, aes(x = zeta0, y = GAP, color = factor(K), group = K)) +
-  geom_line(size = 1) +
-  geom_point(size = 2) +
-  labs(
-    title = "GAP statistic vs zeta0",
-    x = expression(zeta[0]),
-    y = "GAP",
-    color = "K (number of clusters)"
-  ) +
-  theme_minimal() +
-  theme(text = element_text(size = 13))
-
-
-temp_hd=COSA_hd(Y,.1,2,tol=1e-4,n_outer=10,alpha=.1,verbose=F,
-                Ts=round(TT*.2))
-
-table(temp_hd$s,simDat$mchain)
-round(temp_hd$W,3)
-
 
 
 plot_W=function(W){

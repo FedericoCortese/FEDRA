@@ -196,7 +196,20 @@ source("Utils_FEDRA.R")
 X=scale(features_k29)
 
 gap_robCOSA=COSA_gap(Y=X,
-                     zeta_grid=seq(0.01,1,.1),
+                     zeta_grid=seq(0.01,1.5,.1),
                      K_grid=2:5,
                      tol=NULL,n_outer=15,alpha=.1,verbose=F,n_cores=8,
-                     B=50,knn=10,c=2,M=NULL)
+                     B=100,knn=10,c=2,M=NULL)
+
+library(ggplot2)
+ggplot(gap_robCOSA$gap_stats, aes(x = zeta0, y = GAP, color = factor(K), group = K)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  labs(
+    title = "GAP statistic vs zeta0",
+    x = expression(zeta[0]),
+    y = "GAP",
+    color = "K (number of clusters)"
+  ) +
+  theme_minimal() +
+  theme(text = element_text(size = 13))

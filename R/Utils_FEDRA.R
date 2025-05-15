@@ -636,3 +636,125 @@ plot_W=function(W){
 }
 
 
+COSA_gap <- function(Y,
+                     zeta_grid = seq(0.01, 1, .1),
+                     K_grid    = 2:6,
+                     tol       = NULL,
+                     n_outer   = 20,
+                     alpha     = .1,
+                     verbose   = FALSE,
+                     n_cores   = NULL,
+                     B         = 10,
+                     knn       = 10,
+                     c         = 2,
+                     M         = NULL) {
+  
+  require(foreach)
+  require(doParallel)
+  require(dplyr)
+  
+  # 1) build your parameter grid
+  grid <- expand.grid(K = K_grid, zeta0 = zeta_grid, b = 0:B)
+  
+  # 2) set up cores
+  if (is.null(n_cores)) n_cores <- parallel::detectCores() - 1
+  cl <- makeCluster(n_cores)
+  registerDoParallel(cl)
+  
+  # 3) parallel loop, with tryCatch around each call
+  results_list <- foreach(i = seq_len(nrow(grid)),
+                          .packages = c("cluster","Rcpp","DescTools"),
+                          .export   = c("Y","robust_COSA","initialize_states",
+                                        "v_1","lof_star","tol","n_outer",
+                                        "alpha","knn","c","M"),
+                          .errorhandling = "pass") %dopar% {
+                            
+                            params <- grid[i, ]
+                            K_val  <- params$K
+                            zeta0  <- params$zeta0
+                            b      <- params$b
+                            
+                            set.seed(1000*i + b)
+                            
+                            # permute or not
+                            Y_input <- if (b == 0) Y else apply(Y, 2, sample)
+                            permuted <- (b != 0)
+                            
+                            # tryCatch so errors don’t blow everything up
+                            out <- tryCatch({
+                              res <- robust_COSA(Y_input,
+                                                 zeta0   = zeta0,
+                                                 K       = K_val,
+                                                 tol     = tol,
+                                                 n_outer = n_outer,
+                                                 alpha   = alpha,
+                                                 verbose = FALSE,
+                                                 knn     = knn,
+                                                 c       = c,
+                                                 M       = M)
+                              
+                              list(
+                                meta = data.frame(K        = K_val,
+                                                  zeta0    = zeta0,
+                                                  loss     = res$w_loss,
+                                                  permuted = permuted),
+                                cosa = if (!permuted)
+                                  list(K       = K_val,
+                                       zeta0   = zeta0,
+                                       W       = res$W,
+                                       s       = res$s,
+                                       medoids = res$medoids$medoids,
+                                       v       = res$v)
+                                else NULL,
+                                error = NA_character_
+                              )
+                              
+                            }, error = function(e) {
+                              # on error, record the params and the message
+                              list(
+                                meta  = data.frame(K        = K_val,
+                                                   zeta0    = zeta0,
+                                                   loss     = NA_real_,
+                                                   permuted = permuted),
+                                cosa  = NULL,
+                                error = e$message
+                              )
+                            })
+                            
+                            out
+                          }
+  
+  stopCluster(cl)
+  
+  # 4) pull out all the meta–data and cosa results
+  meta_df <- do.call(rbind, lapply(results_list, `[[`, "meta"))
+  cosa_results <- Filter(Negate(is.null),
+                         lapply(results_list, `[[`, "cosa"))
+  
+  # 5) inspect errors, if any
+  errors <- do.call(rbind, lapply(results_list, function(x) {
+    data.frame(x$meta, error = x$error, stringsAsFactors = FALSE)
+  })) %>% filter(!is.na(error))
+  
+  if (nrow(errors) && verbose) {
+    message("Some iterations failed. Inspect 'errors' data frame.")
+    print(errors)
+  }
+  
+  # 6) compute GAP statistics
+  gap_stats <- meta_df %>%
+    group_by(K, zeta0) %>%
+    summarise(
+      log_O             = log(loss[!permuted]),
+      log_O_star_mean   = mean(log(loss[permuted]), na.rm = TRUE),
+      se_log_O_star     = sd(log(loss[permuted]), na.rm = TRUE),
+      GAP               = log_O_star_mean - log_O,
+      .groups           = "drop"
+    )
+  
+  list(
+    gap_stats    = gap_stats,
+    cosa_results = cosa_results,
+    errors       = if (nrow(errors)) errors else NULL
+  )
+}

@@ -222,8 +222,11 @@ best_cosa=gap_res[which.min(gap_res$GAP),]
 cosa_K5_zeta21=robust_COSA(Y=X,zeta0=best_cosa$zeta0,K=best_cosa$K,tol=NULL,
                      n_outer=50,alpha=.1,verbose=T,knn=10,c=2,M=NULL)
 
+cosa_K4_zeta21=robust_COSA(Y=X,zeta0=best_cosa$zeta0,K=4,tol=NULL,
+                           n_outer=50,alpha=.1,verbose=T,knn=10,c=2,M=NULL)
+
 # Features weights
-df_w=data.frame(cosa_K5_zeta21$W)
+df_w=data.frame(cosa_K4_zeta21$W)
 colnames(df_w)=colnames(X)
 df_w
 
@@ -268,8 +271,8 @@ sel_feat=unique(df_filtered$Feature)
 
 res_cosa=data.frame(
   data_features_all_2[,c(sel_feat,"GRP")],
-  clust=cosa_K5_zeta21$s,
-  outl=I(cosa_K5_zeta21$v==0)
+  clust=cosa_K4_zeta21$s,
+  outl=I(cosa_K4_zeta21$v==0)
 )
 
 state_cond=res_cosa %>%
@@ -277,6 +280,7 @@ state_cond=res_cosa %>%
   group_by(clust) %>%
   summarise(across(everything(), mean, na.rm = TRUE), .groups = "drop") %>%
   print(n = Inf)
+state_cond
 
 attach(res_cosa)
 
@@ -291,3 +295,4 @@ state_mean_outl=res_outl %>%
   select(where(is.numeric)) %>%
   summarise(across(everything(), mean, na.rm = TRUE), .groups = "drop")
 
+state_mean_outl

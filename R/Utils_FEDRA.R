@@ -596,16 +596,13 @@ COSA_gap <- function(Y,
                             
                             # tryCatch so errors don’t blow everything up
                             out <- tryCatch({
-                              res <- robust_COSA(Y_input,
+                              res <- COSA(Y_input,
                                                  zeta0   = zeta0,
                                                  K       = K_val,
                                                  tol     = tol,
                                                  n_outer = n_outer,
                                                  alpha   = alpha,
-                                                 verbose = FALSE,
-                                                 knn     = knn,
-                                                 c       = c,
-                                                 M       = M)
+                                                 verbose = FALSE)
                               
                               list(
                                 meta = data.frame(K        = K_val,

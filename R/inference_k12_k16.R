@@ -401,18 +401,16 @@ source("Utils_FEDRA.R")
 library(cluster)
 library(factoextra)
 
-# prv=cluster::clusGap(X, COSA2, 3, B = 10, zeta0=.2)
-
-prv=factoextra::fviz_nbclust(X,COSA2,method="silhouette",k.max=5,
-                             #nboot=10,
-                             verbose=T,zeta0=.2)
-
-plot(prv)
-
-gap_COSA=COSA_gap(Y=X,
-                     zeta_grid=seq(0.01,1.5,.1),
-                     K_grid=2:5,
-                     tol=NULL,n_outer=15,alpha=.1,verbose=F,n_cores=9)
+gap_COSA=COSA_gap(X,
+                  K_grid    = 2:6,
+                  zeta_grid = seq(0.01, 1.5, .1),
+                  tol       = 1e-8,
+                  n_outer   = 15,
+                  alpha     = .1,
+                  verbose   = FALSE,
+                  n_cores   = 9,
+                  B         = 10,
+                  n_init=10)
 
 
 

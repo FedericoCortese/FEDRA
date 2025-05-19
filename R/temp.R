@@ -144,10 +144,16 @@ prv=robust_COSA(Y=Y,zeta0=.2,K=2,tol=NULL,
             verbose=F,knn=10,c=2,M=NULL)
 
 
-temp=COSA_gap(Y,zeta_grid=seq(0.1,1,length.out=3),
-              K_grid=2:3,
-              tol=1e-4,n_outer=10,alpha=.1,verbose=F,
-              B=3,n_cores=3,knn=10,c=2,M=NULL)
+temp=COSA_gap(Y,
+                          K_grid    = 2:6,
+                          zeta_grid = seq(0.01, 1, .3),
+                          tol       = NULL,
+                          n_outer   = 15,
+                          alpha     = .1,
+                          verbose   = FALSE,
+                          n_cores   = NULL,
+                          B         = 10,
+                          n_init=10)
 
 
 library(ggplot2)

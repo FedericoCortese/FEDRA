@@ -413,6 +413,117 @@ gap_COSA=COSA_gap(X,
                   n_init=5)
 
 
+gap_res=gap_COSA$gap_stats
+
+library(ggplot2)
+ggplot(gap_res, aes(x = zeta0, y = GAP, color = factor(K), group = K)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  labs(
+    title = "GAP statistic vs zeta0",
+    x = expression(zeta[0]),
+    y = "GAP",
+    color = "K (number of clusters)"
+  ) +
+  theme_minimal() +
+  theme(text = element_text(size = 13))
+
+
+K=2
+zeta0=0.2
+
+
+cosak12=COSA2(Y=X,K=K,zeta0=zeta0,
+              n_init=10,
+              tol=1e-10,n_outer=20,alpha=.1,verbose=T)
+
+
+round(cosak12$weights,2)
+
+
+weights <- data.frame(cosak12$weights)
+colnames(weights) <- colnames(X)
+weights
+
+library(ggplot2)
+
+weights_df <- as.data.frame(weights)
+weights_df$cluster <- paste0("Cluster ", seq_len(nrow(weights_df)))
+
+# reshape to long format
+weights_df <- as.data.frame(weights)
+weights_df$cluster <- paste0("Cluster ", seq_len(nrow(weights_df)))
+
+# reshape to long format
+weights_long <- pivot_longer(weights_df, 
+                             cols = -cluster, 
+                             names_to = "feature", 
+                             values_to = "weight")
+
+# plot with same y-axis scale across all features
+ggplot(weights_long, aes(x = cluster, y = weight, fill = cluster)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ feature, scales = "fixed") +
+  theme_minimal(base_size = 13) +
+  theme(legend.position = "none",
+        strip.text = element_text(face = "bold")) +
+  labs(x = "Cluster", y = "Feature Weight",
+       title = "Cluster-wise Feature Weights")
+
+res_cosak12=data.frame(
+  data_k12,
+  clust=cosak12$cluster
+)
+
+table(res_cosak12$GRP, res_cosak12$clust)
+
+table(res_cosak12$clust)/101*100
+
+library(dplyr)
+th=.05
+feature_totals <- colSums(weights)
+selected_features <- names(feature_totals[feature_totals > th])
+
+cluster_means <- res_cosak12 %>%
+  group_by(clust) %>%
+  summarise(across(all_of(selected_features), mean, na.rm = TRUE))
+
+
+
+# COSA k 16 ---------------------------------------------------------------
+
+load("C:/Users/federico/OneDrive - CNR/Brancati-Cortese/data and results/FEDRA_varsxclust_k12.Rdata")
+# Togliere variabili con "iowa" e "bart" nel nome
+data_k12=data_k12[,-grep("iowa|bart",colnames(data_k12))]
+
+load("C:/Users/federico/OneDrive - CNR/Brancati-Cortese/data and results/data_features_all.Rdata")
+data_iowa_bart=data_features_all[,c("IDK","beta","rho","Arew","Apun",
+                                    "K","betaF","betaP")]
+
+data_k16=merge(data_k12, data_iowa_bart, by="IDK")
+
+features_k16=subset(data_k16, select = -c(IDK, GRP))
+
+# 1) 
+# Standardizza   
+X <- features_k16
+X <- scale(X)
+
+source("Utils_FEDRA.R")
+library(cluster)
+library(factoextra)
+
+gap_COSA=COSA_gap(X,
+                  K_grid    = 2:5,
+                  zeta_grid = seq(0.01, 1.5, .1),
+                  tol       = 1e-8,
+                  n_outer   = 15,
+                  alpha     = .1,
+                  verbose   = FALSE,
+                  n_cores   = 9,
+                  B         = 50,
+                  n_init=5)
+
 
 gap_res=gap_COSA$gap_stats
 
@@ -430,4 +541,61 @@ ggplot(gap_res, aes(x = zeta0, y = GAP, color = factor(K), group = K)) +
   theme(text = element_text(size = 13))
 
 
+K=2
+zeta0=0.2
 
+
+cosak16=COSA2(Y=X,K=K,zeta0=zeta0,
+              n_init=10,
+              tol=1e-10,n_outer=20,alpha=.1,verbose=T)
+
+
+round(cosak16$weights,2)
+
+
+weights <- data.frame(cosak16$weights)
+colnames(weights) <- colnames(X)
+weights
+
+library(ggplot2)
+
+weights_df <- as.data.frame(weights)
+weights_df$cluster <- paste0("Cluster ", seq_len(nrow(weights_df)))
+
+# reshape to long format
+weights_df <- as.data.frame(weights)
+weights_df$cluster <- paste0("Cluster ", seq_len(nrow(weights_df)))
+
+# reshape to long format
+weights_long <- pivot_longer(weights_df, 
+                             cols = -cluster, 
+                             names_to = "feature", 
+                             values_to = "weight")
+
+# plot with same y-axis scale across all features
+ggplot(weights_long, aes(x = cluster, y = weight, fill = cluster)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ feature, scales = "fixed") +
+  theme_minimal(base_size = 13) +
+  theme(legend.position = "none",
+        strip.text = element_text(face = "bold")) +
+  labs(x = "Cluster", y = "Feature Weight",
+       title = "Cluster-wise Feature Weights")
+
+res_cosak16=data.frame(
+  data_k16,
+  clust=cosak16$cluster
+)
+
+table(res_cosak16$GRP, res_cosak16$clust)
+
+table(res_cosak16$clust)/101*100
+
+library(dplyr)
+th=.05
+feature_totals <- colSums(weights)
+selected_features <- names(feature_totals[feature_totals > th])
+
+cluster_means <- res_cosak16 %>%
+  group_by(clust) %>%
+  summarise(across(all_of(selected_features), mean, na.rm = TRUE))

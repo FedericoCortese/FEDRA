@@ -402,15 +402,15 @@ library(cluster)
 library(factoextra)
 
 gap_COSA=COSA_gap(X,
-                  K_grid    = 2:6,
+                  K_grid    = 2:5,
                   zeta_grid = seq(0.01, 1.5, .1),
                   tol       = 1e-8,
                   n_outer   = 15,
                   alpha     = .1,
                   verbose   = FALSE,
                   n_cores   = 9,
-                  B         = 10,
-                  n_init=10)
+                  B         = 50,
+                  n_init=5)
 
 
 

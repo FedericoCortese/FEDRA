@@ -829,7 +829,7 @@ COSA_gap <- function(Y,
                               list(
                                 meta = data.frame(K        = K_val,
                                                   zeta0    = zeta0,
-                                                  loss     = res$w_loss,
+                                                  loss     = res$loss,
                                                   permuted = permuted),
                                 cosa = if (!permuted)
                                   list(K       = K_val,

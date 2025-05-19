@@ -117,6 +117,26 @@ my_gap=Gap_COSA(Y,K.max=5,
                 verbose  = FALSE,
                 ncores   = 9)
 
+# Plot
+
+library(ggplot2)
+
+ggplot(my_gap, aes(x = zeta0,
+                   y = gap,
+                   color = factor(K),
+                   group = factor(K))) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  scale_color_brewer(palette = "Set1", name = "Numero di cluster\n(K)") +
+  labs(x     = expression(zeta[0]),
+       y     = "Gap statistic",
+       title = "Gap vs. zeta0 per diversi K") +
+  theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "right",
+    plot.title     = element_text(face = "bold", hjust = 0.5)
+  )
+
 
 
 prv=robust_COSA(Y=Y,zeta0=.2,K=2,tol=NULL,

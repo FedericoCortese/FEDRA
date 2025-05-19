@@ -1,3 +1,43 @@
+evaluate_sparse_kmeans_silhouette <- function(X,
+                                              K_vals,
+                                              wb_vals,
+                                              nstart = 20,
+                                              silent = TRUE) {
+  # 1) precompute full distance matrix once
+  dist_X <- dist(X)
+  
+  # 2) build all (K, wbound) combinations
+  combos <- expand.grid(K = K_vals, wbound = wb_vals)
+  
+  # 3) one lapply over all rows of combos
+  res_list <- lapply(seq_len(nrow(combos)), function(i) {
+    k <- combos$K[i]
+    w <- combos$wbound[i]
+    
+    # run sparse k-means for this single w
+    skm <- KMeansSparseCluster(X, K = k,
+                               wbounds = w,
+                               nstart   = nstart,
+                               silent   = silent)
+    # skm is a list of length 1 when `wbounds` is scalar
+    cl <- skm[[1]]$Cs
+    
+    # compute silhouette and take its mean
+    sil <- silhouette(cl, dist_X)
+    avg_sil <- mean(sil[, "sil_width"])
+    
+    data.frame(K        = k,
+               wbound   = w,
+               avg_sil  = avg_sil)
+  })
+  
+  # 4) bind into one data.frame and return
+  results <- do.call(rbind, res_list)
+  rownames(results) <- NULL
+  return(results)
+}
+
+
 initialize_states <- function(Y, K) {
   n <- nrow(Y)
   
@@ -323,30 +363,85 @@ COSA=function(Y,zeta0,K,tol=NULL,n_outer=20,alpha=.1,verbose=F){
   zeta=zeta0
   
   s=initialize_states(Y,K)
-  # Ymedoids=cluster::pam(Y,k=K)
-  # s=Ymedoids$clustering
-  # Ymedoids=Ymedoids$medoids
-  #s=sample(1:K,TT,replace = T)
+  
+  for (outer in 1:n_outer){
+    
+    DW=weight_inv_exp_dist(as.matrix(Y),
+                           s,
+                           W,zeta)
+    medoids=cluster::pam(x=DW,k=K,diss=TRUE)
+    
+    s=medoids$clustering
+    
+    # Compute weights
+    
+    Spk=WCD(s,as.matrix(Y),K)
+    wcd=exp(-Spk/zeta0)
+    W=wcd/rowSums(wcd)
+    
+    
+    w_loss=sum(W*Spk)  
+    eps_W=mean((W-W_old)^2)
+    if (!is.null(tol)) {
+      if (eps_W < tol) {
+        break
+      }
+    }
+    
+    W_old=W
+    zeta=zeta+alpha*zeta0
+    
+    if (verbose) {
+      cat(sprintf('Outer iteration %d: %.6e\n', outer, eps_W))
+    }
+    
+  }
+  
+  
+  return(list(W=W,s=s,medoids=medoids,w_loss=w_loss))
+}
+
+COSA2=function(x,k,zeta0,tol=NULL,n_outer=20,alpha=.1,verbose=F){
+  
+  # Same as COSA but with ordered inputs (for gap stat default function)
+  
+  library(Rcpp)
+  Rcpp::sourceCpp("weight_inv_exp_dist.cpp")
+  Rcpp::sourceCpp("wcd.cpp")
+  
+  P=ncol(x)
+  TT=nrow(x)
+  
+  # best_loss <- NULL
+  # best_s <- NULL
+  # best_W = NULL
+  
+  W=matrix(1/P,nrow=k,ncol=P)
+  W_old=W
+  
+  zeta=zeta0
+  
+  s=initialize_states(x,k)
   
   for (outer in 1:n_outer){
     
     ## Clustering
     #for(inner in 1:n_inner){
-      
-      #Compute distances
-      DW=weight_inv_exp_dist(Y,
-                             s,
-                             W,zeta)
-      medoids=cluster::pam(x=DW,k=K,diss=TRUE)
-      #Ymedoids=Y[medoids$medoids,]
-      s=medoids$clustering
-      
-      # Compute weights
-      
-      Spk=WCD(s,Y,K)
-      wcd=exp(-Spk/zeta0)
-      W=wcd/rowSums(wcd)
-      
+    
+    #Compute distances
+    DW=weight_inv_exp_dist(x,
+                           s,
+                           W,zeta)
+    medoids=cluster::pam(x=DW,k=k,diss=TRUE)
+    #Ymedoids=Y[medoids$medoids,]
+    s=medoids$clustering
+    
+    # Compute weights
+    
+    Spk=WCD(s,x,k)
+    wcd=exp(-Spk/zeta0)
+    W=wcd/rowSums(wcd)
+    
     #}
     
     w_loss=sum(W*Spk)  
@@ -360,11 +455,6 @@ COSA=function(Y,zeta0,K,tol=NULL,n_outer=20,alpha=.1,verbose=F){
     W_old=W
     zeta=zeta+alpha*zeta0
     
-    # print(W)
-    # print(zeta)
-    # print(Spk)
-    # print(zeta0)
-    # print(range(DW))
     
     if (verbose) {
       cat(sprintf('Outer iteration %d: %.6e\n', outer, eps_W))
@@ -373,7 +463,7 @@ COSA=function(Y,zeta0,K,tol=NULL,n_outer=20,alpha=.1,verbose=F){
   }
   
   
-  return(list(W=W,s=s,medoids=medoids,w_loss=w_loss))
+  return(list(cluster=s,W=W,medoids=medoids,w_loss=w_loss))
 }
 
 robust_COSA=function(Y,zeta0,K,tol=NULL,

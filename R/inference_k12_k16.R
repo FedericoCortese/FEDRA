@@ -13,8 +13,6 @@ data_k12=data_k12[-excl,]
 # Escludi IDK e GRP
 features_k12=subset(data_k12, select = -c(IDK, GRP))
 
-library(sparcl)
-
 # Select K and sparsity parameter
 
 # install.packages("sparcl")  # uncomment if you haven't installed sparcl yet
@@ -73,6 +71,38 @@ ggplot(gap_df, aes(x = wbound, y = Gap, color = factor(K), shape = factor(K))) +
 
 K= 2
 wbound= 1.75
+
+# Silhouette index
+source("Utils_FEDRA.R")
+
+res_sil <- evaluate_sparse_kmeans_silhouette(
+  X       = X,
+  K_vals  = Ks,
+  wb_vals = wbounds,
+  nstart  = 20,
+  silent  = TRUE
+)
+
+
+res_sil
+library(ggplot2)
+ggplot(res_sil, aes(x = wbound,
+                    y = avg_sil,
+                    color = factor(K),
+                    group = factor(K))) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  scale_color_brewer(palette = "Dark2", name = "Number of\nClusters (K)") +
+  labs(x = "Sparsity Bound (wbound)",
+       y = "Average Silhouette",
+       title = "Silhouette vs. wbound for Different K") +
+  theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "right",
+    plot.title     = element_text(face = "bold", hjust = 0.5)
+  )
+
+# Bad results with silhouette index
 
 # 6) Run K-means with selected (K, wbound)
 
@@ -203,6 +233,34 @@ ggplot(gap_df, aes(x = wbound, y = Gap, color = factor(K), shape = factor(K))) +
 
 K= 2
 wbound= 1.75
+
+# Silhouette index
+source("Utils_FEDRA.R")
+res_sil_k16 <- evaluate_sparse_kmeans_silhouette(
+  X       = X,
+  K_vals  = Ks,
+  wb_vals = wbounds,
+  nstart  = 20,
+  silent  = TRUE
+)
+
+res_sil_k16
+library(ggplot2)
+ggplot(res_sil_k16, aes(x = wbound,
+                    y = avg_sil,
+                    color = factor(K),
+                    group = factor(K))) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  scale_color_brewer(palette = "Dark2", name = "Number of\nClusters (K)") +
+  labs(x = "Sparsity Bound (wbound)",
+       y = "Average Silhouette",
+       title = "Silhouette vs. wbound for Different K") +
+  theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "right",
+    plot.title     = element_text(face = "bold", hjust = 0.5)
+  )
 
 # 6) Run K-means with selected (K, wbound)
 
@@ -340,6 +398,16 @@ X <- features_k12
 X <- scale(X)
 
 source("Utils_FEDRA.R")
+library(cluster)
+library(factoextra)
+
+# prv=cluster::clusGap(X, COSA2, 3, B = 10, zeta0=.2)
+
+prv=factoextra::fviz_nbclust(X,COSA2,method="silhouette",k.max=5,
+                             #nboot=10,
+                             verbose=T,zeta0=.2)
+
+plot(prv)
 
 gap_COSA=COSA_gap(Y=X,
                      zeta_grid=seq(0.01,1.5,.1),

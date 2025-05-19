@@ -84,6 +84,41 @@ for (i in 1:P) {
   plot(Y[, i], col=truth+1, pch=19,ylab=i)
 }
 
+prv_init=COSA2(Y,K,zeta0,n_init=10,tol=1e-8,n_outer=15,alpha=.1,verbose=F)
+
+remotes::install_github("pimentel/cluster")  
+
+library(cluster)
+# now clusGap() has a do_parallel argument:
+gap <- clusGap(x,
+               FUNcluster = COSA2, 
+               K.max      = 10, 
+               B          = 200, 
+               verbose    = TRUE,
+               do_parallel= TRUE)  
+
+gap_prv=cluster::clusGap(Y,FUNcluster = COSA2,
+                 zeta0=.3,n_init=10,tol=1e-8,n_outer=15,alpha=.1,verbose=F,
+                 K.max=3,
+                 B=10)
+
+plot(gap_prv,main=" ")
+
+table(prv_init$cluster,truth)
+
+source("Utils_FEDRA.R")
+my_gap=Gap_COSA(Y,K.max=5,
+                zeta_vals = seq(0.1,1,length.out=3),
+                B=10,
+                n_init   = 10,
+                tol      = 1e-8,
+                n_outer  = 15,
+                alpha    = 0.1,
+                verbose  = FALSE,
+                ncores   = 9)
+
+
+
 prv=robust_COSA(Y=Y,zeta0=.2,K=2,tol=NULL,
             n_outer=20,alpha=.1,
             verbose=F,knn=10,c=2,M=NULL)

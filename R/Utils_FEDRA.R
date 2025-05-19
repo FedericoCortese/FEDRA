@@ -401,74 +401,125 @@ COSA=function(Y,zeta0,K,tol=NULL,n_outer=20,alpha=.1,verbose=F){
   return(list(W=W,s=s,medoids=medoids,w_loss=w_loss))
 }
 
-COSA2=function(x,k,zeta0,tol=NULL,n_outer=20,alpha=.1,verbose=F){
+COSA2=function(Y,K,zeta0,n_init=10,tol=NULL,n_outer=20,alpha=.1,verbose=F){
   
-  # Same as COSA but with ordered inputs (for gap stat default function)
+  # Same as COSA but with multiple initialization
+  
+  Y=as.matrix(Y)
   
   library(Rcpp)
   Rcpp::sourceCpp("weight_inv_exp_dist.cpp")
   Rcpp::sourceCpp("wcd.cpp")
   
-  P=ncol(x)
-  TT=nrow(x)
+  P=ncol(Y)
+  TT=nrow(Y)
   
-  # best_loss <- NULL
-  # best_s <- NULL
-  # best_W = NULL
   
-  W=matrix(1/P,nrow=k,ncol=P)
-  W_old=W
-  
-  zeta=zeta0
-  
-  s=initialize_states(x,k)
-  
-  for (outer in 1:n_outer){
-    
-    ## Clustering
-    #for(inner in 1:n_inner){
-    
-    #Compute distances
-    DW=weight_inv_exp_dist(x,
-                           s,
-                           W,zeta)
-    medoids=cluster::pam(x=DW,k=k,diss=TRUE)
-    #Ymedoids=Y[medoids$medoids,]
-    s=medoids$clustering
-    
-    # Compute weights
-    
-    Spk=WCD(s,x,k)
-    wcd=exp(-Spk/zeta0)
-    W=wcd/rowSums(wcd)
-    
-    #}
-    
-    w_loss=sum(W*Spk)  
-    eps_W=mean((W-W_old)^2)
-    if (!is.null(tol)) {
-      if (eps_W < tol) {
-        break
-      }
-    }
-    
+  # Function to do one initialization run
+  run_one <- function(init_id) {
+    # 1) init
+    s      <- initialize_states(Y, K)
+    W=matrix(1/P,nrow=K,ncol=P)
     W_old=W
-    zeta=zeta+alpha*zeta0
+    zeta   <- zeta0
     
-    
-    if (verbose) {
-      cat(sprintf('Outer iteration %d: %.6e\n', outer, eps_W))
+    # 2) outer loop
+    for (outer in seq_len(n_outer)) {
+      DW   <- weight_inv_exp_dist(Y, s, W, zeta)
+      med  <- pam(x = DW, k = K, diss = TRUE)
+      s    <- med$clustering
+      
+      Spk  <- WCD(s, Y, K)
+      wcd  <- exp(-Spk / zeta0)
+      W    <- wcd / rowSums(wcd)
+      
+      w_loss <- sum(W * Spk)
+      eps_W  <- mean((W - W_old)^2)
+      if (verbose) {
+        message(sprintf("[init %2d | iter %3d] eps_W=%.2e w_loss=%.2e",
+                        init_id, outer, eps_W, w_loss))
+      }
+      if(!is.null(tol)){
+        if (eps_W < tol) break 
+      }
+      
+      W_old <- W
+      zeta  <- zeta + alpha * zeta0
     }
     
+    list(
+      init       = init_id,
+      cluster = s,
+      weights    = W,
+      zeta       = zeta,
+      loss       = w_loss,
+      iter       = outer,
+      diss       = DW
+    )
   }
   
+  # Run n_init times with lapply
+  results <- lapply(seq_len(n_init), run_one)
   
-  return(list(cluster=s,W=W,medoids=medoids,w_loss=w_loss))
+  # Extract losses and pick best
+  losses <- vapply(results, `[[`, numeric(1), "loss")
+  best   <- which.min(losses)
+  best_res <- results[[best]]
+  
+  return(best_res)
 }
+
+Gap_COSA <- function(Y,
+                     K.max    = 5,
+                     zeta_vals,
+                     B        = 10,
+                     n_init   = 10,
+                     tol      = 1e-8,
+                     n_outer  = 15,
+                     alpha    = 0.1,
+                     verbose  = FALSE,
+                     ncores   = NULL) {
+  # 1) numero di core da usare
+  if (is.null(ncores)) {
+    ncores <- max(1, parallel::detectCores(logical = FALSE) - 1)
+  }
+  cl <- makeCluster(ncores)
+  registerDoParallel(cl)
+  
+  # 2) foreach parallelo su ogni zeta0
+  res <- foreach(z = zeta_vals,
+                 .combine = rbind,
+                 .packages = c("cluster","Rcpp"),
+                 .export   = c("Y","COSA2","initialize_states",
+                               "n_init","tol","n_outer","alpha","verbose",
+                               "K.max","B")) %dopar% {
+                                 gap_obj <- clusGap(
+                                   Y,
+                                   FUNcluster = COSA2,
+                                   zeta0      = z,
+                                   n_init     = n_init,
+                                   tol        = tol,
+                                   n_outer    = n_outer,
+                                   alpha      = alpha,
+                                   verbose    = verbose,
+                                   K.max      = K.max,
+                                   B          = B
+                                 )
+                                 Tab <- as.data.frame(gap_obj$Tab)
+                                 Tab$K     <- seq_len(nrow(Tab))
+                                 Tab$zeta0 <- z
+                                 Tab[, c("K","zeta0","logW","E.logW","gap","SE.sim")]
+                               }
+  
+  stopCluster(cl)
+  return(res)
+}
+
 
 robust_COSA=function(Y,zeta0,K,tol=NULL,
                      n_outer=20,alpha=.1,verbose=F,knn=10,c=2,M=NULL){
   
+  # Da sistemare come in COSA2
   # Robust version of COSA
   library(Rcpp)
   Rcpp::sourceCpp("weight_inv_exp_dist.cpp")
@@ -541,6 +592,81 @@ robust_COSA=function(Y,zeta0,K,tol=NULL,
   return(list(W=W,s=s,medoids=medoids,w_loss=w_loss,v=v))
 }
 
+robust_COSA2=function(Y,K,zeta0,n_init=10,tol=NULL,n_outer=20,alpha=.1,verbose=F,
+                      knn=10, c=2, M=NULL){
+  
+  # Same as COSA but with multiple initialization
+  
+  Y=as.matrix(Y)
+  
+  library(Rcpp)
+  Rcpp::sourceCpp("weight_inv_exp_dist.cpp")
+  Rcpp::sourceCpp("wcd.cpp")
+  
+  P=ncol(Y)
+  TT=nrow(Y)
+  
+  
+  # Function to do one initialization run
+  run_one <- function(init_id) {
+    # 1) init
+    s      <- initialize_states(Y, K)
+    W=matrix(1/P,nrow=K,ncol=P)
+    W_old=W
+    zeta   <- zeta0
+    
+    # 2) outer loop
+    for (outer in seq_len(n_outer)) {
+      
+      v1=v_1(W[s,]*Y,knn=knn,c=c,M=M)
+      v2=v_1(Y,knn=knn,c=c,M=M)
+      
+      v=apply(cbind(v1,v2),1,min)
+      
+      DW   <- weight_inv_exp_dist(as.matrix(Y * v), s, W, zeta)
+      med  <- pam(x = DW, k = K, diss = TRUE)
+      s    <- med$clustering
+      
+      Spk  <- WCD(s, as.matrix(Y * v), K)
+      wcd  <- exp(-Spk / zeta0)
+      W    <- wcd / rowSums(wcd)
+      
+      w_loss <- sum(W * Spk)
+      eps_W  <- mean((W - W_old)^2)
+      if (verbose) {
+        message(sprintf("[init %2d | iter %3d] eps_W=%.2e w_loss=%.2e",
+                        init_id, outer, eps_W, w_loss))
+      }
+      if(!is.null(tol)){
+        if (eps_W < tol) break 
+      }
+      
+      W_old <- W
+      zeta  <- zeta + alpha * zeta0
+    }
+    
+    list(
+      init       = init_id,
+      cluster = s,
+      weights    = W,
+      zeta       = zeta,
+      loss       = w_loss,
+      iter       = outer,
+      diss       = DW,
+      v=v
+    )
+  }
+  
+  # Run n_init times with lapply
+  results <- lapply(seq_len(n_init), run_one)
+  
+  # Extract losses and pick best
+  losses <- vapply(results, `[[`, numeric(1), "loss")
+  best   <- which.min(losses)
+  best_res <- results[[best]]
+  
+  return(best_res)
+}
 
 # COSA_hd=function(Y,zeta0,K,tol=NULL,n_outer=20,alpha=.1,verbose=F,Ts=NULL){
 #   P=ncol(Y)
@@ -643,241 +769,241 @@ plot_W=function(W){
   return(p)
 }
 
-COSA_gap <- function(Y,
-                            zeta_grid = seq(0.01, 1, .1),
-                            K_grid    = 2:6,
-                            tol       = NULL,
-                            n_outer   = 20,
-                            alpha     = .1,
-                            verbose   = FALSE,
-                            n_cores   = NULL,
-                            B         = 10) {
-  
-  require(foreach)
-  require(doParallel)
-  require(dplyr)
-  
-  # 1) build your parameter grid
-  grid <- expand.grid(K = K_grid, zeta0 = zeta_grid, b = 0:B)
-  
-  # 2) set up cores
-  if (is.null(n_cores)) n_cores <- parallel::detectCores() - 1
-  cl <- makeCluster(n_cores)
-  registerDoParallel(cl)
-  
-  # 3) parallel loop, with tryCatch around each call
-  results_list <- foreach(i = seq_len(nrow(grid)),
-                          .packages = c("cluster","Rcpp"),
-                          .export   = c("Y","COSA","initialize_states",
-                                        "tol","n_outer",
-                                        "alpha"),
-                          .errorhandling = "pass") %dopar% {
-                            
-                            params <- grid[i, ]
-                            K_val  <- params$K
-                            zeta0  <- params$zeta0
-                            b      <- params$b
-                            
-                            set.seed(1000*i + b)
-                            
-                            # permute or not
-                            Y_input <- if (b == 0) Y else apply(Y, 2, sample)
-                            permuted <- (b != 0)
-                            
-                            # tryCatch so errors don’t blow everything up
-                            out <- tryCatch({
-                              res <- COSA(Y_input,
-                                                 zeta0   = zeta0,
-                                                 K       = K_val,
-                                                 tol     = tol,
-                                                 n_outer = n_outer,
-                                                 alpha   = alpha,
-                                                 verbose = FALSE)
-                              
-                              list(
-                                meta = data.frame(K        = K_val,
-                                                  zeta0    = zeta0,
-                                                  loss     = res$w_loss,
-                                                  permuted = permuted),
-                                cosa = if (!permuted)
-                                  list(K       = K_val,
-                                       zeta0   = zeta0,
-                                       W       = res$W,
-                                       s       = res$s,
-                                       medoids = res$medoids$medoids)
-                                else NULL,
-                                error = NA_character_
-                              )
-                              
-                            }, error = function(e) {
-                              # on error, record the params and the message
-                              list(
-                                meta  = data.frame(K        = K_val,
-                                                   zeta0    = zeta0,
-                                                   loss     = NA_real_,
-                                                   permuted = permuted),
-                                cosa  = NULL,
-                                error = e$message
-                              )
-                            })
-                            
-                            out
-                          }
-  
-  stopCluster(cl)
-  
-  # 4) pull out all the meta–data and cosa results
-  meta_df <- do.call(rbind, lapply(results_list, `[[`, "meta"))
-  cosa_results <- Filter(Negate(is.null),
-                         lapply(results_list, `[[`, "cosa"))
-  
-  # 5) inspect errors, if any
-  errors <- do.call(rbind, lapply(results_list, function(x) {
-    data.frame(x$meta, error = x$error, stringsAsFactors = FALSE)
-  })) %>% filter(!is.na(error))
-  
-  if (nrow(errors) && verbose) {
-    message("Some iterations failed. Inspect 'errors' data frame.")
-    print(errors)
-  }
-  
-  # 6) compute GAP statistics
-  gap_stats <- meta_df %>%
-    group_by(K, zeta0) %>%
-    summarise(
-      log_O             = log(loss[!permuted]),
-      log_O_star_mean   = mean(log(loss[permuted]), na.rm = TRUE),
-      se_log_O_star     = sd(log(loss[permuted]), na.rm = TRUE),
-      GAP               = log_O_star_mean - log_O,
-      .groups           = "drop"
-    )
-  
-  list(
-    gap_stats    = gap_stats,
-    cosa_results = cosa_results,
-    errors       = if (nrow(errors)) errors else NULL
-  )
-}
-
-robust_COSA_gap <- function(Y,
-                     zeta_grid = seq(0.01, 1, .1),
-                     K_grid    = 2:6,
-                     tol       = NULL,
-                     n_outer   = 20,
-                     alpha     = .1,
-                     verbose   = FALSE,
-                     n_cores   = NULL,
-                     B         = 10,
-                     knn       = 10,
-                     c         = 2,
-                     M         = NULL) {
-  
-  require(foreach)
-  require(doParallel)
-  require(dplyr)
-  
-  # 1) build your parameter grid
-  grid <- expand.grid(K = K_grid, zeta0 = zeta_grid, b = 0:B)
-  
-  # 2) set up cores
-  if (is.null(n_cores)) n_cores <- parallel::detectCores() - 1
-  cl <- makeCluster(n_cores)
-  registerDoParallel(cl)
-  
-  # 3) parallel loop, with tryCatch around each call
-  results_list <- foreach(i = seq_len(nrow(grid)),
-                          .packages = c("cluster","Rcpp","DescTools"),
-                          .export   = c("Y","robust_COSA","initialize_states",
-                                        "v_1","lof_star","tol","n_outer",
-                                        "alpha","knn","c","M"),
-                          .errorhandling = "pass") %dopar% {
-                            
-                            params <- grid[i, ]
-                            K_val  <- params$K
-                            zeta0  <- params$zeta0
-                            b      <- params$b
-                            
-                            set.seed(1000*i + b)
-                            
-                            # permute or not
-                            Y_input <- if (b == 0) Y else apply(Y, 2, sample)
-                            permuted <- (b != 0)
-                            
-                            # tryCatch so errors don’t blow everything up
-                            out <- tryCatch({
-                              res <- robust_COSA(Y_input,
-                                                 zeta0   = zeta0,
-                                                 K       = K_val,
-                                                 tol     = tol,
-                                                 n_outer = n_outer,
-                                                 alpha   = alpha,
-                                                 verbose = FALSE,
-                                                 knn     = knn,
-                                                 c       = c,
-                                                 M       = M)
-                              
-                              list(
-                                meta = data.frame(K        = K_val,
-                                                  zeta0    = zeta0,
-                                                  loss     = res$w_loss,
-                                                  permuted = permuted),
-                                cosa = if (!permuted)
-                                  list(K       = K_val,
-                                       zeta0   = zeta0,
-                                       W       = res$W,
-                                       s       = res$s,
-                                       medoids = res$medoids$medoids,
-                                       v       = res$v)
-                                else NULL,
-                                error = NA_character_
-                              )
-                              
-                            }, error = function(e) {
-                              # on error, record the params and the message
-                              list(
-                                meta  = data.frame(K        = K_val,
-                                                   zeta0    = zeta0,
-                                                   loss     = NA_real_,
-                                                   permuted = permuted),
-                                cosa  = NULL,
-                                error = e$message
-                              )
-                            })
-                            
-                            out
-                          }
-  
-  stopCluster(cl)
-  
-  # 4) pull out all the meta–data and cosa results
-  meta_df <- do.call(rbind, lapply(results_list, `[[`, "meta"))
-  cosa_results <- Filter(Negate(is.null),
-                         lapply(results_list, `[[`, "cosa"))
-  
-  # 5) inspect errors, if any
-  errors <- do.call(rbind, lapply(results_list, function(x) {
-    data.frame(x$meta, error = x$error, stringsAsFactors = FALSE)
-  })) %>% filter(!is.na(error))
-  
-  if (nrow(errors) && verbose) {
-    message("Some iterations failed. Inspect 'errors' data frame.")
-    print(errors)
-  }
-  
-  # 6) compute GAP statistics
-  gap_stats <- meta_df %>%
-    group_by(K, zeta0) %>%
-    summarise(
-      log_O             = log(loss[!permuted]),
-      log_O_star_mean   = mean(log(loss[permuted]), na.rm = TRUE),
-      se_log_O_star     = sd(log(loss[permuted]), na.rm = TRUE),
-      GAP               = log_O_star_mean - log_O,
-      .groups           = "drop"
-    )
-  
-  list(
-    gap_stats    = gap_stats,
-    cosa_results = cosa_results,
-    errors       = if (nrow(errors)) errors else NULL
-  )
-}
+# COSA_gap <- function(Y,
+#                             zeta_grid = seq(0.01, 1, .1),
+#                             K_grid    = 2:6,
+#                             tol       = NULL,
+#                             n_outer   = 20,
+#                             alpha     = .1,
+#                             verbose   = FALSE,
+#                             n_cores   = NULL,
+#                             B         = 10) {
+#   
+#   require(foreach)
+#   require(doParallel)
+#   require(dplyr)
+#   
+#   # 1) build your parameter grid
+#   grid <- expand.grid(K = K_grid, zeta0 = zeta_grid, b = 0:B)
+#   
+#   # 2) set up cores
+#   if (is.null(n_cores)) n_cores <- parallel::detectCores() - 1
+#   cl <- makeCluster(n_cores)
+#   registerDoParallel(cl)
+#   
+#   # 3) parallel loop, with tryCatch around each call
+#   results_list <- foreach(i = seq_len(nrow(grid)),
+#                           .packages = c("cluster","Rcpp"),
+#                           .export   = c("Y","COSA","initialize_states",
+#                                         "tol","n_outer",
+#                                         "alpha"),
+#                           .errorhandling = "pass") %dopar% {
+#                             
+#                             params <- grid[i, ]
+#                             K_val  <- params$K
+#                             zeta0  <- params$zeta0
+#                             b      <- params$b
+#                             
+#                             set.seed(1000*i + b)
+#                             
+#                             # permute or not
+#                             Y_input <- if (b == 0) Y else apply(Y, 2, sample)
+#                             permuted <- (b != 0)
+#                             
+#                             # tryCatch so errors don’t blow everything up
+#                             out <- tryCatch({
+#                               res <- COSA(Y_input,
+#                                                  zeta0   = zeta0,
+#                                                  K       = K_val,
+#                                                  tol     = tol,
+#                                                  n_outer = n_outer,
+#                                                  alpha   = alpha,
+#                                                  verbose = FALSE)
+#                               
+#                               list(
+#                                 meta = data.frame(K        = K_val,
+#                                                   zeta0    = zeta0,
+#                                                   loss     = res$w_loss,
+#                                                   permuted = permuted),
+#                                 cosa = if (!permuted)
+#                                   list(K       = K_val,
+#                                        zeta0   = zeta0,
+#                                        W       = res$W,
+#                                        s       = res$s,
+#                                        medoids = res$medoids$medoids)
+#                                 else NULL,
+#                                 error = NA_character_
+#                               )
+#                               
+#                             }, error = function(e) {
+#                               # on error, record the params and the message
+#                               list(
+#                                 meta  = data.frame(K        = K_val,
+#                                                    zeta0    = zeta0,
+#                                                    loss     = NA_real_,
+#                                                    permuted = permuted),
+#                                 cosa  = NULL,
+#                                 error = e$message
+#                               )
+#                             })
+#                             
+#                             out
+#                           }
+#   
+#   stopCluster(cl)
+#   
+#   # 4) pull out all the meta–data and cosa results
+#   meta_df <- do.call(rbind, lapply(results_list, `[[`, "meta"))
+#   cosa_results <- Filter(Negate(is.null),
+#                          lapply(results_list, `[[`, "cosa"))
+#   
+#   # 5) inspect errors, if any
+#   errors <- do.call(rbind, lapply(results_list, function(x) {
+#     data.frame(x$meta, error = x$error, stringsAsFactors = FALSE)
+#   })) %>% filter(!is.na(error))
+#   
+#   if (nrow(errors) && verbose) {
+#     message("Some iterations failed. Inspect 'errors' data frame.")
+#     print(errors)
+#   }
+#   
+#   # 6) compute GAP statistics
+#   gap_stats <- meta_df %>%
+#     group_by(K, zeta0) %>%
+#     summarise(
+#       log_O             = log(loss[!permuted]),
+#       log_O_star_mean   = mean(log(loss[permuted]), na.rm = TRUE),
+#       se_log_O_star     = sd(log(loss[permuted]), na.rm = TRUE),
+#       GAP               = log_O_star_mean - log_O,
+#       .groups           = "drop"
+#     )
+#   
+#   list(
+#     gap_stats    = gap_stats,
+#     cosa_results = cosa_results,
+#     errors       = if (nrow(errors)) errors else NULL
+#   )
+# }
+# 
+# robust_COSA_gap <- function(Y,
+#                      zeta_grid = seq(0.01, 1, .1),
+#                      K_grid    = 2:6,
+#                      tol       = NULL,
+#                      n_outer   = 20,
+#                      alpha     = .1,
+#                      verbose   = FALSE,
+#                      n_cores   = NULL,
+#                      B         = 10,
+#                      knn       = 10,
+#                      c         = 2,
+#                      M         = NULL) {
+#   
+#   require(foreach)
+#   require(doParallel)
+#   require(dplyr)
+#   
+#   # 1) build your parameter grid
+#   grid <- expand.grid(K = K_grid, zeta0 = zeta_grid, b = 0:B)
+#   
+#   # 2) set up cores
+#   if (is.null(n_cores)) n_cores <- parallel::detectCores() - 1
+#   cl <- makeCluster(n_cores)
+#   registerDoParallel(cl)
+#   
+#   # 3) parallel loop, with tryCatch around each call
+#   results_list <- foreach(i = seq_len(nrow(grid)),
+#                           .packages = c("cluster","Rcpp","DescTools"),
+#                           .export   = c("Y","robust_COSA","initialize_states",
+#                                         "v_1","lof_star","tol","n_outer",
+#                                         "alpha","knn","c","M"),
+#                           .errorhandling = "pass") %dopar% {
+#                             
+#                             params <- grid[i, ]
+#                             K_val  <- params$K
+#                             zeta0  <- params$zeta0
+#                             b      <- params$b
+#                             
+#                             set.seed(1000*i + b)
+#                             
+#                             # permute or not
+#                             Y_input <- if (b == 0) Y else apply(Y, 2, sample)
+#                             permuted <- (b != 0)
+#                             
+#                             # tryCatch so errors don’t blow everything up
+#                             out <- tryCatch({
+#                               res <- robust_COSA(Y_input,
+#                                                  zeta0   = zeta0,
+#                                                  K       = K_val,
+#                                                  tol     = tol,
+#                                                  n_outer = n_outer,
+#                                                  alpha   = alpha,
+#                                                  verbose = FALSE,
+#                                                  knn     = knn,
+#                                                  c       = c,
+#                                                  M       = M)
+#                               
+#                               list(
+#                                 meta = data.frame(K        = K_val,
+#                                                   zeta0    = zeta0,
+#                                                   loss     = res$w_loss,
+#                                                   permuted = permuted),
+#                                 cosa = if (!permuted)
+#                                   list(K       = K_val,
+#                                        zeta0   = zeta0,
+#                                        W       = res$W,
+#                                        s       = res$s,
+#                                        medoids = res$medoids$medoids,
+#                                        v       = res$v)
+#                                 else NULL,
+#                                 error = NA_character_
+#                               )
+#                               
+#                             }, error = function(e) {
+#                               # on error, record the params and the message
+#                               list(
+#                                 meta  = data.frame(K        = K_val,
+#                                                    zeta0    = zeta0,
+#                                                    loss     = NA_real_,
+#                                                    permuted = permuted),
+#                                 cosa  = NULL,
+#                                 error = e$message
+#                               )
+#                             })
+#                             
+#                             out
+#                           }
+#   
+#   stopCluster(cl)
+#   
+#   # 4) pull out all the meta–data and cosa results
+#   meta_df <- do.call(rbind, lapply(results_list, `[[`, "meta"))
+#   cosa_results <- Filter(Negate(is.null),
+#                          lapply(results_list, `[[`, "cosa"))
+#   
+#   # 5) inspect errors, if any
+#   errors <- do.call(rbind, lapply(results_list, function(x) {
+#     data.frame(x$meta, error = x$error, stringsAsFactors = FALSE)
+#   })) %>% filter(!is.na(error))
+#   
+#   if (nrow(errors) && verbose) {
+#     message("Some iterations failed. Inspect 'errors' data frame.")
+#     print(errors)
+#   }
+#   
+#   # 6) compute GAP statistics
+#   gap_stats <- meta_df %>%
+#     group_by(K, zeta0) %>%
+#     summarise(
+#       log_O             = log(loss[!permuted]),
+#       log_O_star_mean   = mean(log(loss[permuted]), na.rm = TRUE),
+#       se_log_O_star     = sd(log(loss[permuted]), na.rm = TRUE),
+#       GAP               = log_O_star_mean - log_O,
+#       .groups           = "drop"
+#     )
+#   
+#   list(
+#     gap_stats    = gap_stats,
+#     cosa_results = cosa_results,
+#     errors       = if (nrow(errors)) errors else NULL
+#   )
+# }

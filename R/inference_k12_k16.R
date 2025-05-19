@@ -542,7 +542,7 @@ ggplot(gap_res, aes(x = zeta0, y = GAP, color = factor(K), group = K)) +
 
 
 K=2
-zeta0=0.2
+zeta0=0.6
 
 
 cosak16=COSA2(Y=X,K=K,zeta0=zeta0,
@@ -599,3 +599,5 @@ selected_features <- names(feature_totals[feature_totals > th])
 cluster_means <- res_cosak16 %>%
   group_by(clust) %>%
   summarise(across(all_of(selected_features), mean, na.rm = TRUE))
+
+cluster_means

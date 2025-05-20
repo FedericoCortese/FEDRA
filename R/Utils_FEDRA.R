@@ -473,52 +473,6 @@ COSA2=function(Y,K,zeta0,n_init=10,tol=NULL,n_outer=20,alpha=.1,verbose=F){
   return(best_res)
 }
 
-Gap_COSA <- function(Y,
-                     K.max    = 5,
-                     zeta_vals,
-                     B        = 10,
-                     n_init   = 10,
-                     tol      = 1e-8,
-                     n_outer  = 15,
-                     alpha    = 0.1,
-                     verbose  = FALSE,
-                     ncores   = NULL) {
-  # 1) numero di core da usare
-  if (is.null(ncores)) {
-    ncores <- max(1, parallel::detectCores(logical = FALSE) - 1)
-  }
-  cl <- makeCluster(ncores)
-  registerDoParallel(cl)
-  
-  # 2) foreach parallelo su ogni zeta0
-  res <- foreach(z = zeta_vals,
-                 .combine = rbind,
-                 .packages = c("cluster","Rcpp"),
-                 .export   = c("Y","COSA2","initialize_states",
-                               "n_init","tol","n_outer","alpha","verbose",
-                               "K.max","B")) %dopar% {
-                                 gap_obj <- clusGap(
-                                   Y,
-                                   FUNcluster = COSA2,
-                                   zeta0      = z,
-                                   n_init     = n_init,
-                                   tol        = tol,
-                                   n_outer    = n_outer,
-                                   alpha      = alpha,
-                                   verbose    = verbose,
-                                   K.max      = K.max,
-                                   B          = B
-                                 )
-                                 Tab <- as.data.frame(gap_obj$Tab)
-                                 Tab$K     <- seq_len(nrow(Tab))
-                                 Tab$zeta0 <- z
-                                 Tab[, c("K","zeta0","logW","E.logW","gap","SE.sim")]
-                               }
-  
-  stopCluster(cl)
-  return(res)
-}
-
 
 robust_COSA=function(Y,zeta0,K,tol=NULL,
                      n_outer=20,alpha=.1,verbose=F,knn=10,c=2,M=NULL){

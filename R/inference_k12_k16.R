@@ -135,6 +135,8 @@ weights_plot=ggplot(df_w, aes(x = reorder(feature, weight), y = weight)) +
 weights_plot
 # 8) Inspect cluster assignments
 
+write.table(weights,file="weights_sparse_kmeans_k12.txt")
+
 res_skm_=data.frame(
   data_k12,
   clust=skm_[[1]]$Cs
@@ -271,6 +273,9 @@ skm_=KMeansSparseCluster(X, K=K, wbounds = wbound, silent =
 weights <- skm_[[1]]$ws
 weights=weights/sum(weights) # normalize weights to sum to 1
 features <- colnames(X)
+
+
+write.table(weights,file="weights_sparse_kmeans_k16.txt")
 
 library(ggplot2)
 
@@ -420,10 +425,10 @@ ggplot(gap_res, aes(x = zeta0, y = GAP, color = factor(K), group = K)) +
   geom_line(size = 1) +
   geom_point(size = 2) +
   labs(
-    title = "GAP statistic vs zeta0",
-    x = expression(zeta[0]),
-    y = "GAP",
-    color = "K (number of clusters)"
+    #title = "GAP statistic vs zeta0",
+    x = "Sparsity parameter",
+    y = "Gap statistic",
+    color = "K"
   ) +
   theme_minimal() +
   theme(text = element_text(size = 13))
@@ -445,6 +450,8 @@ weights <- data.frame(cosak12$weights)
 colnames(weights) <- colnames(X)
 weights
 
+write.table(weights,file="weights_cosak12.txt")
+
 library(ggplot2)
 
 weights_df <- as.data.frame(weights)
@@ -455,10 +462,14 @@ weights_df <- as.data.frame(weights)
 weights_df$cluster <- paste0("Cluster ", seq_len(nrow(weights_df)))
 
 # reshape to long format
+library(dplyr)
+library(tidyr)
+
 weights_long <- pivot_longer(weights_df, 
                              cols = -cluster, 
                              names_to = "feature", 
                              values_to = "weight")
+
 
 # plot with same y-axis scale across all features
 ggplot(weights_long, aes(x = cluster, y = weight, fill = cluster)) +
@@ -467,8 +478,11 @@ ggplot(weights_long, aes(x = cluster, y = weight, fill = cluster)) +
   theme_minimal(base_size = 13) +
   theme(legend.position = "none",
         strip.text = element_text(face = "bold")) +
-  labs(x = "Cluster", y = "Feature Weight",
-       title = "Cluster-wise Feature Weights")
+  labs(
+    x = " ", 
+       y = "Weight"
+       #title = "Cluster-wise Feature Weights"
+       )
 
 res_cosak12=data.frame(
   data_k12,
@@ -488,7 +502,9 @@ cluster_means <- res_cosak12 %>%
   group_by(clust) %>%
   summarise(across(all_of(selected_features), mean, na.rm = TRUE))
 
+cluster_means
 
+write.table(res_cosak12,file="results_res_cosak12.txt")
 
 # COSA k 16 ---------------------------------------------------------------
 
@@ -532,10 +548,10 @@ ggplot(gap_res, aes(x = zeta0, y = GAP, color = factor(K), group = K)) +
   geom_line(size = 1) +
   geom_point(size = 2) +
   labs(
-    title = "GAP statistic vs zeta0",
-    x = expression(zeta[0]),
-    y = "GAP",
-    color = "K (number of clusters)"
+    #title = "GAP statistic vs zeta0",
+    x = "Sparsity parameter",
+    y = "Gap statistic",
+    color = "K"
   ) +
   theme_minimal() +
   theme(text = element_text(size = 13))
@@ -556,6 +572,8 @@ round(cosak16$weights,2)
 weights <- data.frame(cosak16$weights)
 colnames(weights) <- colnames(X)
 weights
+
+write.table(weights,file="weights_cosak16.txt")
 
 library(ggplot2)
 
@@ -579,8 +597,10 @@ ggplot(weights_long, aes(x = cluster, y = weight, fill = cluster)) +
   theme_minimal(base_size = 13) +
   theme(legend.position = "none",
         strip.text = element_text(face = "bold")) +
-  labs(x = "Cluster", y = "Feature Weight",
-       title = "Cluster-wise Feature Weights")
+  labs(x = " ", y = "Weight"
+       # ,
+       # title = "Cluster-wise Feature Weights"
+       )
 
 res_cosak16=data.frame(
   data_k16,
@@ -601,3 +621,5 @@ cluster_means <- res_cosak16 %>%
   summarise(across(all_of(selected_features), mean, na.rm = TRUE))
 
 cluster_means
+
+write.table(res_cosak16,file="results_res_cosak16.txt")
